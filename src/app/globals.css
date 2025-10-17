@@ -1,1 +1,17 @@
 @import "tailwindcss";
+@keyframes float-slow {
+  0%   { transform: translate3d(0,0,0) scale(1); }
+  50%  { transform: translate3d(2%, -2%, 0) scale(1.03); }
+  100% { transform: translate3d(0,0,0) scale(1); }
+}
+@keyframes grid-shift {
+  0%   { background-position: 0 0; }
+  100% { background-position: 18px 18px; }
+}
+@keyframes pulse-slow {
+  0%,100% { opacity: .2 }
+  50% { opacity: .35 }
+}
+.animate-float-slow { animation: float-slow 12s ease-in-out infinite; }
+.animate-grid-shift { animation: grid-shift 2.8s linear infinite; }
+.animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }

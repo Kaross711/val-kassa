@@ -1,34 +1,50 @@
+// app/layout.tsx
 import "./globals.css";
 import Link from "next/link";
+import FuturisticLogo from "@/app/components/FuturisticLogo";
+import BackgroundFX from "@/app/components/BackgroundFX";
 
 export const metadata = {
-    title: "Val-Kassa",
-    description: "Kassasysteem voor dagelijkse verkoop",
+  title: "Val-Kassa",
+  description: "Kassasysteem voor dagelijkse verkoop",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-    return (
-        <html lang="nl">
-        <body className="min-h-screen bg-white text-gray-900">
-        <header className="border-b bg-gray-50">
-            <nav className="max-w-6xl mx-auto flex items-center gap-6 px-6 py-3">
-                <Link href="/" className="font-semibold text-lg">
-                    💶 Val-Kassa
-                </Link>
-                <Link href="/kassa" className="hover:text-black text-gray-600">
-                    Kassa
-                </Link>
-                <Link href="/admin/prices" className="hover:text-black text-gray-600">
-                    Dagprijzen
-                </Link>
-                <Link href="/verkoop" className="hover:text-black text-gray-600">
-                    Verkoop
-                </Link>
-            </nav>
+  return (
+    <html lang="nl">
+      <body className="min-h-screen bg-[#0b0d10] text-slate-100 selection:bg-teal-300/20 selection:text-teal-100">
+        <BackgroundFX />
+        <header className="sticky top-0 z-40 border-b border-white/10 bg-black/30 backdrop-blur-md">
+          <nav className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3">
+            <Link href="/" className="flex items-center gap-2">
+              <FuturisticLogo className="text-lg" />
+            </Link>
+            <div className="ml-auto flex items-center gap-2">
+              <NavLink href="/kassa">Kassa</NavLink>
+              <NavLink href="/admin/prices">Dagprijzen</NavLink>
+              <NavLink href="/verkoop">Verkoop</NavLink>
+            </div>
+          </nav>
         </header>
 
-        <main className="p-4">{children}</main>
-        </body>
-        </html>
-    );
+        <main className="mx-auto max-w-6xl p-4 md:p-6">
+          {children}
+        </main>
+      </body>
+    </html>
+  );
+}
+
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="relative px-3 py-1.5 text-sm text-slate-200/90 hover:text-white transition
+                 after:absolute after:inset-x-2 after:-bottom-[2px] after:h-[2px] after:scale-x-0 after:bg-gradient-to-r
+                 after:from-teal-300 after:via-cyan-300 after:to-violet-400 after:rounded-full
+                 hover:after:scale-x-100 after:transition-transform after:origin-left"
+    >
+      {children}
+    </Link>
+  );
 }
