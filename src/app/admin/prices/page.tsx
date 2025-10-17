@@ -53,7 +53,7 @@ export default function PricesAdmin() {
       console.error("Supabase fout (prijs opslaan):", error);
       setError(error.message);
     } else {
-      setNewPrices((prev) => ({ ...prev, [productId]: "" })); // bugfix: correcte spread
+      setNewPrices((prev) => ({ ...prev, [productId]: "" }));
       await loadProducts();
     }
     setLoading(false);
@@ -61,19 +61,19 @@ export default function PricesAdmin() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-3xl font-bold">Dagprijzen beheren</h1>
+      <h1 className="text-3xl font-bold text-slate-900">Dagprijzen beheren</h1>
 
-      {error && <p className="text-red-400 text-sm">Fout: {error}</p>}
+      {error && <p className="text-red-600 text-sm font-medium">Fout: {error}</p>}
 
       <div className="grid gap-3">
         {products.map((p) => (
-          <div key={p.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
-            <div className="w-64 font-medium">{p.name}</div>
-            <div className="w-28 text-sm opacity-70">
-              {p.price !== null ? `huidig: € ${p.price.toFixed(2)}` : "huidig: –"}
+          <div key={p.id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+            <div className="w-64 font-medium text-slate-900">{p.name}</div>
+            <div className="w-28 text-sm text-slate-600">
+              {p.price !== null ? `huidig: € ${p.price.toFixed(2)}` : "huidig: —"}
             </div>
             <input
-              className="border border-white/10 rounded px-2 py-1 w-24 bg-black/20"
+              className="border border-gray-300 rounded px-2 py-1 w-24 bg-white text-slate-900 placeholder:text-slate-400"
               placeholder="Nieuwe €"
               value={newPrices[p.id] ?? ""}
               onChange={(e) =>
@@ -86,7 +86,7 @@ export default function PricesAdmin() {
             <button
               onClick={() => savePrice(p.id)}
               disabled={!newPrices[p.id] || loading}
-              className="px-3 py-1 rounded bg-gradient-to-r from-teal-400 via-cyan-400 to-violet-500 text-black font-semibold disabled:opacity-50 hover:brightness-110 transition"
+              className="px-3 py-1 rounded bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold disabled:opacity-50 hover:brightness-110 transition shadow-sm"
             >
               Opslaan
             </button>

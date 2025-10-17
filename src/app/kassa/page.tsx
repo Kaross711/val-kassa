@@ -190,61 +190,60 @@ export default function KassaPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 text-slate-100">
+    <div className="p-4 md:p-6 text-slate-900">
       <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between mb-4 gap-3">
-          <h1 className="text-3xl font-bold">Kassa</h1>
+          <h1 className="text-3xl font-bold text-slate-900">Kassa</h1>
           <input
-            className="border border-white/10 bg-white/[0.04] rounded px-3 py-2 w-64 outline-none focus:ring-2 focus:ring-teal-300/50 text-white/90 placeholder:text-slate-400"
+            className="border border-gray-300 bg-white rounded px-3 py-2 w-64 outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 text-slate-900 placeholder:text-slate-400"
             placeholder="Zoek product…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
 
-        {error && <p className="text-red-400 text-sm mb-3">Fout: {error}</p>}
+        {error && <p className="text-red-600 text-sm mb-3 font-medium">Fout: {error}</p>}
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map((p) => (
             <button
               key={p.id}
               onClick={() => addProduct(p)}
-              className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-left transition 
-                         hover:shadow-[0_0_0_1px_rgba(0,255,200,0.35),0_10px_30px_-10px_rgba(124,58,237,.25)]
+              className="rounded-xl border border-gray-200 bg-white p-4 text-left transition shadow-sm
+                         hover:shadow-md hover:border-green-300
                          hover:-translate-y-[1px] active:translate-y-[0px]"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="font-medium leading-tight break-words">{p.name}</div>
+                <div className="font-medium leading-tight break-words text-slate-900">{p.name}</div>
                 {p.unit === "KILO" && (
-                  <span className="shrink-0 whitespace-nowrap text-xs px-2 py-0.5 rounded-full border border-white/20">
+                  <span className="shrink-0 whitespace-nowrap text-xs px-2 py-0.5 rounded-full border border-gray-300 bg-gray-50 text-slate-700">
                     KILO
                   </span>
                 )}
               </div>
-              <div className="mt-2 text-lg font-bold">
-                {p.price != null ? `€ ${p.price.toFixed(2)}` : <span className="opacity-60">—</span>}
+              <div className="mt-2 text-lg font-bold text-slate-900">
+                {p.price != null ? `€ ${p.price.toFixed(2)}` : <span className="text-slate-400">—</span>}
               </div>
-              <div className="mt-3 text-sm text-right opacity-70">Klik om toe te voegen</div>
+              <div className="mt-3 text-sm text-right text-slate-500">Klik om toe te voegen</div>
             </button>
           ))}
         </div>
       </div>
 
       {/* Sticky bottom bar */}
-      <div className="fixed bottom-0 inset-x-0 border-t border-white/10 bg-black/60 backdrop-blur supports-[backdrop-filter]:bg-black/50">
+      <div className="fixed bottom-0 inset-x-0 border-t border-gray-200 bg-white/95 backdrop-blur shadow-lg">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3">
           <div className="text-lg relative">
-            <span className="font-semibold">Totaal</span>{" "}
-            <span className="relative inline-block after:absolute after:inset-0 after:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent)]
-                               after:translate-x-[-120%] after:animate-[shine_2.5s_ease_infinite]">
+            <span className="font-semibold text-slate-900">Totaal</span>{" "}
+            <span className="relative inline-block text-slate-900 font-bold">
               € {total.toFixed(2)}
             </span>
           </div>
           <button
             onClick={() => cart.length && setOpen(true)}
             disabled={cart.length === 0}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-teal-400 via-cyan-400 to-violet-500 text-black font-semibold
-                       disabled:opacity-50 hover:brightness-110 transition shadow-[0_0_20px_rgba(0,255,200,.35)]"
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold
+                       disabled:opacity-50 hover:brightness-110 transition shadow-md"
           >
             Bekijk bon
           </button>
@@ -259,33 +258,33 @@ export default function KassaPage() {
             role="dialog"
             aria-modal="true"
             className="absolute right-0 top-0 h-full w-full sm:w-[440px]
-                       bg-black/60 backdrop-blur-xl shadow-xl border-l border-white/10 flex flex-col"
+                       bg-white shadow-xl border-l border-gray-200 flex flex-col"
           >
-            <div className="p-4 border-b border-white/10 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Winkelmand</h2>
-              <button onClick={() => setOpen(false)} className="text-sm opacity-70 hover:opacity-100">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+              <h2 className="text-xl font-semibold text-slate-900">Winkelmand</h2>
+              <button onClick={() => setOpen(false)} className="text-sm text-slate-600 hover:text-slate-900 font-medium">
                 Sluiten ✕
               </button>
             </div>
 
-            <div className="flex-1 overflow-auto p-4 space-y-3">
+            <div className="flex-1 overflow-auto p-4 space-y-3 bg-gray-50">
               {cart.length === 0 ? (
-                <p className="opacity-70 text-sm">Nog geen items.</p>
+                <p className="text-slate-600 text-sm">Nog geen items.</p>
               ) : (
                 <ul className="space-y-2">
                   {cart.map((ci) => (
-                    <li key={ci.product_id} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                    <li key={ci.product_id} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
                       <div className="flex items-center justify-between">
-                        <div className="font-medium leading-tight break-words">{ci.name}</div>
+                        <div className="font-medium leading-tight break-words text-slate-900">{ci.name}</div>
                         <button
                           onClick={() => removeItem(ci.product_id)}
-                          className="text-sm opacity-60 hover:opacity-100"
+                          className="text-sm text-red-600 hover:text-red-700 font-medium"
                         >
                           verwijderen
                         </button>
                       </div>
 
-                      <div className="mt-1 text-xs opacity-70">
+                      <div className="mt-1 text-xs text-slate-600">
                         € {ci.unit_price.toFixed(2)} {ci.unit === "KILO" ? "/ KILO" : "/ STUK"}
                       </div>
 
@@ -293,7 +292,7 @@ export default function KassaPage() {
                         <div className="mt-2 flex items-center gap-2">
                           <button
                             onClick={() => updateQty(ci.product_id, (ci.quantity ?? 0) - 1)}
-                            className="px-2 py-1 border border-white/10 rounded bg-white/[0.02]"
+                            className="px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 text-slate-900"
                           >
                             −
                           </button>
@@ -303,25 +302,25 @@ export default function KassaPage() {
                             step={1}
                             value={ci.quantity ?? 0}
                             onChange={(e) => updateQty(ci.product_id, Number(e.target.value || 0))}
-                            className="w-20 border border-white/10 rounded px-2 py-1 bg-black/20"
+                            className="w-20 border border-gray-300 rounded px-2 py-1 bg-white text-slate-900"
                           />
                           <button
                             onClick={() => updateQty(ci.product_id, (ci.quantity ?? 0) + 1)}
-                            className="px-2 py-1 border border-white/10 rounded bg-white/[0.02]"
+                            className="px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 text-slate-900"
                           >
                             +
                           </button>
                         </div>
                       ) : (
                         <div className="mt-2 flex items-center gap-2">
-                          <label className="text-sm opacity-70">kg</label>
+                          <label className="text-sm text-slate-600">kg</label>
                           <input
                             type="number"
                             min={0}
                             step="0.01"
                             value={ci.weight_kg ?? 0}
                             onChange={(e) => updateWeight(ci.product_id, Number(e.target.value || 0))}
-                            className="w-24 border border-white/10 rounded px-2 py-1 bg-black/20"
+                            className="w-24 border border-gray-300 rounded px-2 py-1 bg-white text-slate-900"
                           />
                         </div>
                       )}
@@ -331,18 +330,18 @@ export default function KassaPage() {
               )}
             </div>
 
-            <div className="p-4 border-t border-white/10 space-y-3">
+            <div className="p-4 border-t border-gray-200 space-y-3 bg-white">
               <textarea
                 placeholder="Opmerking (optioneel)…"
-                className="w-full h-20 border border-white/10 rounded px-3 py-2 bg-black/20"
+                className="w-full h-20 border border-gray-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-400"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
               />
               <button
                 onClick={checkout}
                 disabled={saving || cart.length === 0}
-                className="w-full py-2 rounded-xl bg-gradient-to-r from-teal-400 via-cyan-400 to-violet-500 text-black font-semibold
-                           disabled:opacity-50 hover:brightness-110 transition shadow-[0_0_20px_rgba(0,255,200,.35)]"
+                className="w-full py-2 rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold
+                           disabled:opacity-50 hover:brightness-110 transition shadow-md"
               >
                 {saving ? "Opslaan…" : "Afrekenen"}
               </button>

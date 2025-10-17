@@ -72,7 +72,7 @@ export default function VerkoopPage() {
   async function loadDaily(r: Range) {
     const start = rangeStartISO(r);
     let q = supabase.from("daily_sales").select("*").order("sales_date", { ascending: false });
-    if (start) q = q.gte("sales_date", start.slice(0, 10)); // YYYY-MM-DD
+    if (start) q = q.gte("sales_date", start.slice(0, 10));
     const { data, error } = await q;
     if (!error) setDaily((data ?? []) as DailySale[]);
   }
@@ -97,7 +97,7 @@ export default function VerkoopPage() {
     <div className="p-4 md:p-6 space-y-6">
       <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between mb-2 gap-3">
-          <h1 className="text-3xl font-bold">Verkoop</h1>
+          <h1 className="text-3xl font-bold text-slate-900">Verkoop</h1>
           <div className="flex items-center gap-2">
             {(["all", "today", "week"] as const).map((k) => (
               <button
@@ -105,8 +105,8 @@ export default function VerkoopPage() {
                 onClick={() => setRange(k)}
                 className={`px-3 py-1 rounded border ${
                   range === k
-                    ? "bg-gradient-to-r from-teal-400 via-cyan-400 to-violet-500 text-black font-semibold"
-                    : "border-white/20 bg-white/[0.02] hover:bg-white/[0.06]"
+                    ? "bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold shadow-sm"
+                    : "border-gray-300 bg-white hover:bg-gray-50 text-slate-700"
                 }`}
               >
                 {k === "all" ? "Alles" : k === "today" ? "Vandaag" : "7 dagen"}
@@ -116,35 +116,35 @@ export default function VerkoopPage() {
         </div>
       </div>
 
-      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {error && <p className="text-red-600 text-sm font-medium">{error}</p>}
 
       {/* 1️⃣ Dagoverzicht */}
       <section className="mx-auto max-w-6xl">
-        <h2 className="text-xl font-semibold mb-2">Verkocht per dag</h2>
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
+        <h2 className="text-xl font-semibold mb-2 text-slate-900">Verkocht per dag</h2>
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
           <table className="min-w-full text-sm">
-            <thead className="bg-white/[0.03] text-left">
+            <thead className="bg-gray-50 text-left">
               <tr>
-                <th className="px-3 py-2">Datum</th>
-                <th className="px-3 py-2">Product</th>
-                <th className="px-3 py-2">Hoeveelheid</th>
-                <th className="px-3 py-2">Omzet (€)</th>
+                <th className="px-3 py-2 text-slate-900 font-semibold">Datum</th>
+                <th className="px-3 py-2 text-slate-900 font-semibold">Product</th>
+                <th className="px-3 py-2 text-slate-900 font-semibold">Hoeveelheid</th>
+                <th className="px-3 py-2 text-slate-900 font-semibold">Omzet (€)</th>
               </tr>
             </thead>
             <tbody>
               {daily.map((d, i) => (
-                <tr key={i} className="border-t border-white/10">
-                  <td className="px-3 py-1">{d.sales_date}</td>
-                  <td className="px-3 py-1">{d.product_name}</td>
-                  <td className="px-3 py-1">
+                <tr key={i} className="border-t border-gray-200">
+                  <td className="px-3 py-1 text-slate-700">{d.sales_date}</td>
+                  <td className="px-3 py-1 text-slate-700">{d.product_name}</td>
+                  <td className="px-3 py-1 text-slate-700">
                     {d.total_amount.toFixed(2)} {d.unit}
                   </td>
-                  <td className="px-3 py-1">€ {d.total_revenue.toFixed(2)}</td>
+                  <td className="px-3 py-1 text-slate-900 font-medium">€ {d.total_revenue.toFixed(2)}</td>
                 </tr>
               ))}
               {daily.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-3 py-4 text-center opacity-70">
+                  <td colSpan={4} className="px-3 py-4 text-center text-slate-600">
                     Geen resultaten voor deze periode.
                   </td>
                 </tr>
@@ -156,9 +156,9 @@ export default function VerkoopPage() {
 
       {/* 2️⃣ Bonnenlijst */}
       <section className="mx-auto max-w-6xl">
-        <h2 className="text-xl font-semibold mb-2">Alle aankopen</h2>
+        <h2 className="text-xl font-semibold mb-2 text-slate-900">Alle aankopen</h2>
         {loading ? (
-          <p className="opacity-70 text-sm">Laden…</p>
+          <p className="text-slate-600 text-sm">Laden…</p>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
             {receipts.map((r) => {
@@ -177,19 +177,19 @@ export default function VerkoopPage() {
                   onClick={() => loadItems(r.id)}
                   className={`rounded-xl p-3 text-left transition border ${
                     selected === r.id
-                      ? "border-teal-300/60"
-                      : "border-white/10 hover:shadow-[0_0_0_1px_rgba(0,255,200,0.35),0_10px_30px_-10px_rgba(124,58,237,.25)]"
-                  } bg-white/[0.02]`}
+                      ? "border-green-400 bg-green-50 shadow-md"
+                      : "border-gray-200 hover:border-green-300 hover:shadow-md bg-white"
+                  }`}
                 >
-                  <div className="font-semibold">
-                    {dateStr} – {timeStr}
+                  <div className="font-semibold text-slate-900">
+                    {dateStr} — {timeStr}
                   </div>
-                  <div className="text-sm opacity-70">€ {r.total_gross?.toFixed(2) ?? "0.00"}</div>
+                  <div className="text-sm text-slate-600">€ {r.total_gross?.toFixed(2) ?? "0.00"}</div>
                 </button>
               );
             })}
             {receipts.length === 0 && (
-              <p className="opacity-70 text-sm">Geen bonnen in deze periode.</p>
+              <p className="text-slate-600 text-sm">Geen bonnen in deze periode.</p>
             )}
           </div>
         )}
@@ -198,34 +198,34 @@ export default function VerkoopPage() {
       {/* 3️⃣ Detailvenster */}
       {selected && (
         <section className="mx-auto max-w-6xl">
-          <h2 className="text-xl font-semibold mb-2">
+          <h2 className="text-xl font-semibold mb-2 text-slate-900">
             Bon-details
-            <button onClick={() => setSelected(null)} className="ml-3 text-sm text-teal-300 hover:text-white">
+            <button onClick={() => setSelected(null)} className="ml-3 text-sm text-green-600 hover:text-green-700 font-medium">
               sluiten
             </button>
           </h2>
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
+          <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
             <table className="min-w-full text-sm">
-              <thead className="bg-white/[0.03] text-left">
+              <thead className="bg-gray-50 text-left">
                 <tr>
-                  <th className="px-3 py-2">Product</th>
-                  <th className="px-3 py-2">Hoeveelheid</th>
-                  <th className="px-3 py-2">Prijs (€)</th>
+                  <th className="px-3 py-2 text-slate-900 font-semibold">Product</th>
+                  <th className="px-3 py-2 text-slate-900 font-semibold">Hoeveelheid</th>
+                  <th className="px-3 py-2 text-slate-900 font-semibold">Prijs (€)</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((i, idx) => (
-                  <tr key={idx} className="border-t border-white/10">
-                    <td className="px-3 py-1">{i.product_name}</td>
-                    <td className="px-3 py-1">
+                  <tr key={idx} className="border-t border-gray-200">
+                    <td className="px-3 py-1 text-slate-700">{i.product_name}</td>
+                    <td className="px-3 py-1 text-slate-700">
                       {i.unit === "KILO" ? `${i.weight_kg?.toFixed(2)} kg` : `${i.quantity} st.`}
                     </td>
-                    <td className="px-3 py-1">€ {i.line_total.toFixed(2)}</td>
+                    <td className="px-3 py-1 text-slate-900 font-medium">€ {i.line_total.toFixed(2)}</td>
                   </tr>
                 ))}
                 {items.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="px-3 py-4 text-center opacity-70">
+                    <td colSpan={3} className="px-3 py-4 text-center text-slate-600">
                       Geen regels voor deze bon.
                     </td>
                   </tr>

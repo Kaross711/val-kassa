@@ -12,9 +12,9 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="nl">
-      <body className="min-h-screen bg-[#0b0d10] text-slate-100 selection:bg-teal-300/20 selection:text-teal-100">
+      <body className="min-h-screen bg-white text-slate-900 selection:bg-green-400/20 selection:text-green-900">
         <BackgroundFX />
-        <header className="sticky top-0 z-40 border-b border-white/10 bg-black/30 backdrop-blur-md">
+        <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/80 backdrop-blur-md shadow-sm">
           <nav className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3">
             <Link href="/" className="flex items-center gap-2">
               <FuturisticLogo className="text-lg" />
@@ -39,9 +39,9 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
   return (
     <Link
       href={href}
-      className="relative px-3 py-1.5 text-sm text-slate-200/90 hover:text-white transition
+      className="relative px-3 py-1.5 text-sm text-slate-700 hover:text-slate-900 transition font-medium
                  after:absolute after:inset-x-2 after:-bottom-[2px] after:h-[2px] after:scale-x-0 after:bg-gradient-to-r
-                 after:from-teal-300 after:via-cyan-300 after:to-violet-400 after:rounded-full
+                 after:from-green-400 after:via-orange-400 after:to-red-500 after:rounded-full
                  hover:after:scale-x-100 after:transition-transform after:origin-left"
     >
       {children}

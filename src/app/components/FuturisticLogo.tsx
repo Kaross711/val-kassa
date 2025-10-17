@@ -4,13 +4,13 @@ export default function FuturisticLogo({ className = "" }: { className?: string 
     <div className={`relative inline-flex items-center ${className}`}>
       <svg
         width="36" height="36" viewBox="0 0 64 64" aria-label="Val-Kassa"
-        className="drop-shadow-[0_0_12px_rgba(0,255,200,0.45)]"
+        className="drop-shadow-[0_0_12px_rgba(74,222,128,0.45)]"
       >
         <defs>
           <linearGradient id="vk-grad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#00F5D4"/>
-            <stop offset="50%" stopColor="#00D9F5"/>
-            <stop offset="100%" stopColor="#7C3AED"/>
+            <stop offset="0%" stopColor="#4ADE80"/>
+            <stop offset="50%" stopColor="#FB923C"/>
+            <stop offset="100%" stopColor="#EF4444"/>
           </linearGradient>
           <filter id="glow">
             <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
