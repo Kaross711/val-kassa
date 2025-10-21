@@ -22,6 +22,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="ml-auto flex items-center gap-2">
               <NavLink href="/kassa">Kassa</NavLink>
               <NavLink href="/admin/prices">Dagprijzen</NavLink>
+              <NavLink href="/inkoop">Inkoop</NavLink>
+              <NavLink href="/bestellen">Bestellen</NavLink>
               <NavLink href="/verkoop">Verkoop</NavLink>
             </div>
           </nav>

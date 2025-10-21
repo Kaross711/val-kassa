@@ -6,7 +6,9 @@ import { supabase } from "@/lib/supabase";
 type Product = {
   id: string;
   name: string;
+  unit: "STUK" | "KILO";
   price: number | null;
+  stock_quantity: number | null;
 };
 
 type ArchivedProduct = {
@@ -18,33 +20,61 @@ export default function PricesAdmin() {
   const [products, setProducts] = useState<Product[]>([]);
   const [archived, setArchived] = useState<ArchivedProduct[]>([]);
   const [newPrices, setNewPrices] = useState<Record<string, string>>({});
+  const [newStock, setNewStock] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Nieuw: state voor toevoegen
   const [newProductName, setNewProductName] = useState("");
   const [newProductPrice, setNewProductPrice] = useState("");
+  const [newProductStock, setNewProductStock] = useState("");
 
   // UI: tab voor actief/verborgen
   const [showArchived, setShowArchived] = useState<"active" | "archived">("active");
 
   async function loadProducts() {
-    // Actieve (via view)
+    // Actieve (met unit toegevoegd!)
     const { data, error } = await supabase
-        // TIP: deze view toont idealiter alleen actieve producten
-        .from("products_with_price")
-        .select("id,name,price")
+        .from("products")
+        .select("id,name,unit,stock_quantity")
+        .eq("is_active", true)
         .order("name");
 
     if (error) {
       console.error("Supabase fout (prijzen laden):", error);
       setError(error.message);
     } else {
-      setProducts((data ?? []) as Product[]);
+      // Haal ook de prijzen op
+      const ids = (data ?? []).map((p) => (p as { id: string }).id);
+      if (ids.length > 0) {
+        const { data: pricesData } = await supabase
+            .from("prices")
+            .select("product_id,price")
+            .in("product_id", ids)
+            .order("valid_from", { ascending: false });
+
+        const priceMap = new Map<string, number>();
+        (pricesData ?? []).forEach((p) => {
+          const pid = (p as { product_id: string }).product_id;
+          const price = (p as { price: number }).price;
+          if (!priceMap.has(pid)) priceMap.set(pid, price);
+        });
+
+        const combined = (data ?? []).map((p) => {
+          const product = p as { id: string; name: string; unit: "STUK" | "KILO"; stock_quantity: number | null };
+          return {
+            ...product,
+            price: priceMap.get(product.id) ?? null,
+          };
+        });
+        setProducts(combined as Product[]);
+      } else {
+        setProducts([]);
+      }
       setError(null);
     }
 
-    // Verborgen (rechtstreeks uit products)
+    // Verborgen
     const { data: hidden, error: hiddenErr } = await supabase
         .from("products")
         .select("id,name")
@@ -90,7 +120,32 @@ export default function PricesAdmin() {
     setLoading(false);
   }
 
-  // Product toevoegen (met nette duplicate-afhandeling richting soft-deletes)
+  async function saveStock(productId: string) {
+    const value = newStock[productId];
+    if (!value) return;
+
+    const numeric = Number(value);
+    if (Number.isNaN(numeric) || numeric < 0) {
+      alert("Voer een geldig aantal in");
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await supabase
+        .from("products")
+        .update({ stock_quantity: numeric })
+        .eq("id", productId);
+
+    if (error) {
+      console.error("Supabase fout (voorraad opslaan):", error);
+      setError(error.message);
+    } else {
+      setNewStock((prev) => ({ ...prev, [productId]: "" }));
+      await loadProducts();
+    }
+    setLoading(false);
+  }
+
   async function addProduct() {
     const name = newProductName.trim();
     if (!name) {
@@ -99,30 +154,33 @@ export default function PricesAdmin() {
     }
 
     const hasPrice = newProductPrice.trim().length > 0;
-    const parsedPrice = hasPrice
-        ? Number(newProductPrice.trim().replace(",", "."))
-        : null;
+    const parsedPrice = hasPrice ? Number(newProductPrice.trim().replace(",", ".")) : null;
+
+    const hasStock = newProductStock.trim().length > 0;
+    const parsedStock = hasStock ? Number(newProductStock.trim()) : 0;
 
     if (hasPrice && (parsedPrice === null || Number.isNaN(parsedPrice))) {
       alert("Voer een geldige prijs in (bijv. 2.50)");
       return;
     }
 
+    if (hasStock && (parsedStock === null || Number.isNaN(parsedStock) || parsedStock < 0)) {
+      alert("Voer een geldige voorraad in");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    // 1) Probeer gewoon te inserten
     const { data: inserted, error: insertErr } = await supabase
         .from("products")
-        .insert([{ name, unit: "STUK" }]) // <-- unit verplicht invullen
+        .insert([{ name, unit: "STUK", stock_quantity: parsedStock }])
         .select("id")
         .single();
 
     let newId: string | undefined = inserted?.id as string | undefined;
 
-    // 2) Als dat faalt door duplicate op name (soft-deleted), herstel dan i.p.v. nieuw aan te maken
     if (insertErr) {
-      // check of er een verborgen product met die naam bestaat
       const { data: existingHidden, error: checkErr } = await supabase
           .from("products")
           .select("id, is_active")
@@ -130,10 +188,9 @@ export default function PricesAdmin() {
           .single();
 
       if (!checkErr && existingHidden && (existingHidden as { is_active: boolean }).is_active === false) {
-        // herstel
         const { data: restored, error: restoreErr } = await supabase
             .from("products")
-            .update({ is_active: true })
+            .update({ is_active: true, stock_quantity: parsedStock })
             .eq("id", (existingHidden as { id: string }).id)
             .select("id")
             .single();
@@ -153,7 +210,6 @@ export default function PricesAdmin() {
       }
     }
 
-    // Optioneel direct prijs zetten via bestaande RPC
     if (newId && hasPrice && parsedPrice !== null) {
       const { error: priceErr } = await supabase.rpc("set_price", {
         _product_id: newId,
@@ -167,11 +223,11 @@ export default function PricesAdmin() {
 
     setNewProductName("");
     setNewProductPrice("");
+    setNewProductStock("");
     await loadProducts();
     setLoading(false);
   }
 
-  // Soft delete: markeer product als inactief i.p.v. hard delete
   async function deleteProduct(id: string) {
     if (!id) return;
 
@@ -196,7 +252,6 @@ export default function PricesAdmin() {
     setLoading(false);
   }
 
-  // Herstellen uit verborgen
   async function restoreProduct(id: string) {
     setLoading(true);
     setError(null);
@@ -217,7 +272,7 @@ export default function PricesAdmin() {
 
   return (
       <div className="p-6 space-y-6">
-        <h1 className="text-3xl font-bold text-slate-900">Dagprijzen beheren</h1>
+        <h1 className="text-3xl font-bold text-slate-900">Producten & Voorraad beheren</h1>
 
         {error && <p className="text-red-600 text-sm font-medium">Fout: {error}</p>}
 
@@ -262,6 +317,13 @@ export default function PricesAdmin() {
                     value={newProductPrice}
                     onChange={(e) => setNewProductPrice(e.target.value)}
                 />
+                <input
+                    className="border border-gray-300 rounded px-3 py-2 w-32 bg-white text-slate-900 placeholder:text-slate-400"
+                    placeholder="Voorraad (opt.)"
+                    type="number"
+                    value={newProductStock}
+                    onChange={(e) => setNewProductStock(e.target.value)}
+                />
                 <button
                     onClick={addProduct}
                     disabled={loading}
@@ -271,7 +333,7 @@ export default function PricesAdmin() {
                 </button>
               </div>
               <p className="text-xs text-slate-500 mt-2">
-                Je kunt de prijs leeg laten en later met “Opslaan” per product zetten.
+                Je kunt prijs en voorraad leeg laten en later invullen.
               </p>
             </div>
         )}
@@ -284,29 +346,64 @@ export default function PricesAdmin() {
                       key={p.id}
                       className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm"
                   >
-                    <div className="w-64 font-medium text-slate-900">{p.name}</div>
-                    <div className="w-36 text-sm text-slate-600">
-                      {p.price !== null ? `huidig: € ${p.price.toFixed(2)}` : "huidig: —"}
+                    <div className="w-48 font-medium text-slate-900 flex items-center gap-2">
+                      {p.name}
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-gray-300 bg-gray-50 text-slate-700">
+                        {p.unit === "KILO" ? "KG" : "ST"}
+                      </span>
+                    </div>
+                    
+                    {/* Prijs sectie */}
+                    <div className="flex items-center gap-2">
+                      <div className="w-28 text-sm text-slate-600">
+                        {p.price !== null ? `prijs: € ${p.price.toFixed(2)}` : "prijs: —"}
+                      </div>
+                      <input
+                          className="border border-gray-300 rounded px-2 py-1 w-20 bg-white text-slate-900 placeholder:text-slate-400"
+                          placeholder="€"
+                          value={newPrices[p.id] ?? ""}
+                          onChange={(e) =>
+                              setNewPrices((prev) => ({
+                                ...prev,
+                                [p.id]: e.target.value,
+                              }))
+                          }
+                      />
+                      <button
+                          onClick={() => savePrice(p.id)}
+                          disabled={!newPrices[p.id] || loading}
+                          className="px-3 py-1 rounded bg-blue-500 text-white text-sm font-semibold disabled:opacity-50 hover:brightness-110 transition"
+                      >
+                        Prijs opslaan
+                      </button>
                     </div>
 
-                    <input
-                        className="border border-gray-300 rounded px-2 py-1 w-24 bg-white text-slate-900 placeholder:text-slate-400"
-                        placeholder="Nieuwe €"
-                        value={newPrices[p.id] ?? ""}
-                        onChange={(e) =>
-                            setNewPrices((prev) => ({
-                              ...prev,
-                              [p.id]: e.target.value,
-                            }))
-                        }
-                    />
-                    <button
-                        onClick={() => savePrice(p.id)}
-                        disabled={!newPrices[p.id] || loading}
-                        className="px-3 py-1 rounded bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold disabled:opacity-50 hover:brightness-110 transition shadow-sm"
-                    >
-                      Opslaan
-                    </button>
+                    {/* Voorraad sectie */}
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 text-sm text-slate-600">
+                        voorraad: {p.stock_quantity ?? 0} {p.unit === "KILO" ? "kg" : "st."}
+                      </div>
+                      <input
+                          className="border border-gray-300 rounded px-2 py-1 w-20 bg-white text-slate-900 placeholder:text-slate-400"
+                          placeholder={p.unit === "KILO" ? "kg" : "aantal"}
+                          type="number"
+                          step={p.unit === "KILO" ? "0.01" : "1"}
+                          value={newStock[p.id] ?? ""}
+                          onChange={(e) =>
+                              setNewStock((prev) => ({
+                                ...prev,
+                                [p.id]: e.target.value,
+                              }))
+                          }
+                      />
+                      <button
+                          onClick={() => saveStock(p.id)}
+                          disabled={!newStock[p.id] || loading}
+                          className="px-3 py-1 rounded bg-green-500 text-white text-sm font-semibold disabled:opacity-50 hover:brightness-110 transition"
+                      >
+                        Voorraad opslaan
+                      </button>
+                    </div>
 
                     <div className="grow" />
 
