@@ -178,7 +178,7 @@ export default function KassaPage() {
     const p = modalProduct;
 
     if (p.unit === "STUK") {
-      const quantity = Math.floor(value);
+      const quantity = Math.round(value * 100) / 100;  // 2 decimalen toestaan
       const idx = cart.findIndex(
         (ci) => ci.product_id === p.id && ci.unit === "STUK" && ci.unit_price === p.price
       );
@@ -224,23 +224,20 @@ export default function KassaPage() {
     setModalValue("1");
   }
 
-  function updateQty(product_id: string, qty: number) {
-    setCart((prev) => {
-      const nextQty = Math.max(0, Math.floor(Number.isFinite(qty) ? qty : 0));
-      if (nextQty <= 0) {
-        return prev.filter((ci) => !(ci.product_id === product_id && ci.unit === "STUK"));
-      }
-      return prev.map((ci) =>
-        ci.product_id === product_id && ci.unit === "STUK"
-          ? {
-              ...ci,
-              quantity: nextQty,
-              line_total: round2(ci.unit_price * nextQty),
-            }
-          : ci
-      );
-    });
-  }
+function updateQty(product_id: string, qty: number) {
+  setCart((prev) => {
+    const nextQty = Math.max(0, Number.isFinite(qty) ? Math.round(qty * 100) / 100 : 0);
+    if (nextQty <= 0) {
+      return prev.filter((ci) => !(ci.product_id === product_id && ci.unit === "STUK"));
+    }
+    return prev.map((ci) =>
+      ci.product_id === product_id && ci.unit === "STUK"
+        ? { ...ci, quantity: nextQty, line_total: round2(ci.unit_price * nextQty) }
+        : ci
+    );
+  });
+}
+
 
   function updateWeight(product_id: string, w: number) {
     setCart((prev) => {
@@ -251,10 +248,10 @@ export default function KassaPage() {
       return prev.map((ci) =>
         ci.product_id === product_id && ci.unit === "KILO"
           ? {
-              ...ci,
-              weight_kg: weight,
-              line_total: round2(ci.unit_price * weight),
-            }
+            ...ci,
+            weight_kg: weight,
+            line_total: round2(ci.unit_price * weight),
+          }
           : ci
       );
     });
@@ -488,10 +485,10 @@ export default function KassaPage() {
                           </button>
                           <input
                             type="number"
-                            min={0}
-                            step={1}
-                            value={ci.quantity ?? 0}
-                            onChange={(e) => updateQty(ci.product_id, Number(e.target.value || 0))}
+                            step="0.01"        // <— was "1" bij STUK
+                            min="0.01"         // <— was "1" bij STUK
+                            value={modalValue}
+                            onChange={(e) => setModalValue(e.target.value)}
                             className="w-20 border border-gray-300 rounded px-2 py-1 bg-white text-slate-900"
                           />
                           <button
