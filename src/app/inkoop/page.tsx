@@ -277,7 +277,7 @@ export default function InkoopPage() {
     return products.filter(p => p.name.toLowerCase().includes(q));
   }, [products, manualSearch]);
 
-  function addManualItem() {
+  async function addManualItem() {
     if (!manualProductId) {
       setNotification("Kies eerst een product");
       return;
@@ -291,25 +291,67 @@ export default function InkoopPage() {
     const actual = qty * upb;
     const line = Math.round(actual * price * 100) / 100;
 
-    const newItem: PurchaseItem = {
-      product_id: product.id,
-      product_name: product.name,
-      quantity: qty,
-      units_per_box: upb,
-      actual_quantity: actual,
-      unit_price: price,
-      line_total: line,
-      matched: true,
-    };
-    setItems(prev => [...prev, newItem]);
+    setSaving(true);
+    setError(null);
 
-    // reset form voor volgende invoer
-    setManualProductId("");
-    setManualQty(1);
-    setManualUPB(1);
-    setManualUnitPrice(0);
-    setManualSearch("");
-    setNotification("✓ Product handmatig toegevoegd");
+    try {
+      // Stap 1: Maak een purchase_order aan
+      const { data: order, error: orderError } = await supabase
+        .from("purchase_orders")
+        .insert([{ 
+          supplier: supplier.trim() || "Handmatig toegevoegd", 
+          total_amount: line 
+        }])
+        .select("id")
+        .single();
+      
+      if (orderError) throw orderError;
+      const orderId = (order as { id: string }).id;
+
+      // Stap 2: Maak een purchase_order_item aan
+      const { error: itemError } = await supabase
+        .from("purchase_order_items")
+        .insert([{
+          purchase_order_id: orderId,
+          product_id: product.id,
+          quantity: qty,
+          units_per_box: upb,
+          actual_quantity: actual,
+          unit_price: price,
+          line_total: line,
+        }]);
+      
+      if (itemError) throw itemError;
+
+      // Stap 3: Update voorraad
+      const newStock = (product.stock_quantity ?? 0) + actual;
+      const { error: stockError } = await supabase
+        .from("products")
+        .update({ stock_quantity: newStock })
+        .eq("id", product.id);
+      
+      if (stockError) throw stockError;
+
+      // Reset form
+      setManualProductId("");
+      setManualQty(1);
+      setManualUPB(1);
+      setManualUnitPrice(0);
+      setManualSearch("");
+      
+      setNotification(`✓ ${actual} ${product.unit === "KILO" ? "kg" : "st."} ${product.name} toegevoegd!`);
+      
+      // Reload data
+      await loadProducts();
+      await loadOrders();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Fout bij toevoegen product";
+      setError(msg);
+      setNotification("✗ " + msg);
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
   }
 
   // ---------- Opslaan ----------
@@ -501,7 +543,8 @@ BELANGRIJK:
 
         {/* Handmatig toevoegen */}
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm mb-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-3">Handmatig product toevoegen</h2>
+          <h2 className="text-lg font-semibold text-slate-900 mb-1">Handmatig product toevoegen</h2>
+          <p className="text-sm text-slate-600 mb-4">Vul de gegevens in en klik op "Direct toevoegen" om het product meteen op te slaan</p>
           <div className="grid gap-3 md:grid-cols-5">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1">Product</label>
@@ -562,9 +605,10 @@ BELANGRIJK:
           <div className="mt-3 flex justify-end">
             <button
               onClick={addManualItem}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold hover:brightness-110 transition shadow-md"
+              disabled={saving}
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-md"
             >
-              Toevoegen aan pakbon
+              {saving ? "Bezig met opslaan..." : "✓ Direct toevoegen"}
             </button>
           </div>
         </div>
