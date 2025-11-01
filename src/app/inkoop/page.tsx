@@ -18,15 +18,13 @@ type PurchaseItem = {
   quantity: number;        // aantal dozen/pakken op pakbon
   units_per_box: number;   // stuks per pak
   actual_quantity: number; // totaal stuks = quantity * units_per_box
-  unit_price: number;      // prijs per stuk
-  line_total: number;      // actual_quantity * unit_price
   matched: boolean;
+  confidence: "high" | "low"; // nieuw: confidence level
 };
 
 type UnmatchedItem = {
   scanned_name: string;
   quantity: number;
-  price: number;
   suggestions: Product[];
 };
 
@@ -42,14 +40,12 @@ type PurchaseOrderItem = {
   quantity: number;
   units_per_box: number;
   actual_quantity: number;
-  unit_price: number;
-  line_total: number;
 };
 
 type ScannedItem = {
   product_name: string;
   quantity: number;
-  price: number;
+  confidence: number; // 0-1 score van AI
 };
 
 const openai = new OpenAI({
@@ -63,6 +59,7 @@ export default function InkoopPage() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [unmatchedItems, setUnmatchedItems] = useState<UnmatchedItem[]>([]);
   const [supplier, setSupplier] = useState("");
+  const [totalAmount, setTotalAmount] = useState<number>(0); // handmatig invoeren
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
@@ -79,7 +76,6 @@ export default function InkoopPage() {
   const [manualProductId, setManualProductId] = useState<string>("");
   const [manualQty, setManualQty] = useState<number>(1);
   const [manualUPB, setManualUPB] = useState<number>(1);
-  const [manualUnitPrice, setManualUnitPrice] = useState<number>(0);
 
   // ---------- Effects ----------
   useEffect(() => {
@@ -133,8 +129,6 @@ export default function InkoopPage() {
         quantity,
         units_per_box,
         actual_quantity,
-        unit_price,
-        line_total,
         products (name)
       `)
       .eq("purchase_order_id", orderId);
@@ -148,8 +142,6 @@ export default function InkoopPage() {
         quantity: item.quantity,
         units_per_box: item.units_per_box,
         actual_quantity: item.actual_quantity,
-        unit_price: item.unit_price,
-        line_total: item.line_total,
       }));
       setSelectedOrderItems(formattedItems);
     }
@@ -169,13 +161,14 @@ export default function InkoopPage() {
       if (itemsError) throw itemsError;
 
       for (const item of orderItems ?? []) {
-        const { data: product } = await supabase
+        const { data: productData } = await supabase
           .from("products")
           .select("stock_quantity")
           .eq("id", item.product_id)
           .single();
-        if (product) {
-          const newStock = Math.max(0, (product.stock_quantity ?? 0) - item.actual_quantity);
+
+        if (productData) {
+          const newStock = (productData.stock_quantity ?? 0) - item.actual_quantity;
           await supabase
             .from("products")
             .update({ stock_quantity: newStock })
@@ -187,471 +180,514 @@ export default function InkoopPage() {
         .from("purchase_orders")
         .delete()
         .eq("id", orderId);
+
       if (deleteError) throw deleteError;
 
-      setNotification("✓ Pakbon verwijderd en voorraad bijgewerkt");
+      setNotification("Pakbon succesvol verwijderd en voorraad bijgewerkt");
       setSelectedOrderId(null);
       setSelectedOrderItems([]);
-      await loadOrders();
-      await loadProducts();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Fout bij verwijderen";
-      setError(msg);
-      console.error(e);
+      loadOrders();
+      loadProducts();
+    } catch (err: any) {
+      setError(err.message);
     }
   }
 
-  // ---------- Helpers ----------
-  function removeItem(index: number) {
-    setItems((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function updateUnitsPerBox(index: number, value: number) {
-    setItems((prev) => {
-      const newItems = [...prev];
-      const item = newItems[index];
-      const upb = Math.max(1, Math.floor(value));
-      const actualQty = item.quantity * upb;
-      const lineTotal = Math.round(actualQty * item.unit_price * 100) / 100;
-      newItems[index] = {
-        ...item,
-        units_per_box: upb,
-        actual_quantity: actualQty,
-        line_total: lineTotal,
-      };
-      return newItems;
-    });
-  }
-
-  function updateActualQuantity(index: number, value: number) {
-    setItems((prev) => {
-      const newItems = [...prev];
-      const item = newItems[index];
-      const actualQty = Math.max(1, Math.floor(value));
-      newItems[index] = { ...item, actual_quantity: actualQty };
-      return newItems;
-    });
-  }
-
-  function findSimilarProducts(scannedName: string): Product[] {
-    const name = scannedName.toLowerCase();
-    const words = name.split(/[\s\-_]+/);
-    const scored = products.map((product) => {
-      const productName = product.name.toLowerCase();
-      let score = 0;
-      if (productName === name) score += 100;
-      if (productName.includes(name)) score += 50;
-      if (name.includes(productName)) score += 50;
-      words.forEach((w) => { if (w.length > 2 && productName.includes(w)) score += 10; });
-      if (productName.startsWith(name.slice(0, 3))) score += 5;
-      return { product, score };
-    });
-    return scored.filter(s => s.score > 0).sort((a,b) => b.score - a.score).slice(0,5).map(s => s.product);
-  }
-
-  function selectMatch(unmatchedIndex: number, product: Product) {
-    const unmatched = unmatchedItems[unmatchedIndex];
-    const newItem: PurchaseItem = {
-      product_id: product.id,
-      product_name: product.name,
-      quantity: unmatched.quantity,
-      units_per_box: 1,
-      actual_quantity: unmatched.quantity * 1,
-      unit_price: unmatched.price,
-      line_total: Math.round(unmatched.quantity * 1 * unmatched.price * 100) / 100,
-      matched: true,
-    };
-    setItems((prev) => [...prev, newItem]);
-    setUnmatchedItems((prev) => prev.filter((_, i) => i !== unmatchedIndex));
-    setNotification(`✓ "${unmatched.scanned_name}" gekoppeld aan "${product.name}"`);
-  }
-
-  function skipUnmatched(unmatchedIndex: number) {
-    setUnmatchedItems((prev) => prev.filter((_, i) => i !== unmatchedIndex));
-  }
-
-  // ---------- Handmatig toevoegen ----------
-  const filteredProducts = useMemo(() => {
-    const q = manualSearch.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(p => p.name.toLowerCase().includes(q));
-  }, [products, manualSearch]);
-
-  async function addManualItem() {
-    if (!manualProductId) {
-      setNotification("Kies eerst een product");
-      return;
-    }
-    const product = products.find(p => p.id === manualProductId);
-    if (!product) return;
-
-    const qty = Math.max(1, Math.floor(manualQty));
-    const upb = Math.max(1, Math.floor(manualUPB));
-    const price = Math.max(0, Number.isFinite(manualUnitPrice) ? manualUnitPrice : 0);
-    const actual = qty * upb;
-    const line = Math.round(actual * price * 100) / 100;
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      // Stap 1: Maak een purchase_order aan
-      const { data: order, error: orderError } = await supabase
-        .from("purchase_orders")
-        .insert([{ 
-          supplier: supplier.trim() || "Handmatig toegevoegd", 
-          total_amount: line 
-        }])
-        .select("id")
-        .single();
-      
-      if (orderError) throw orderError;
-      const orderId = (order as { id: string }).id;
-
-      // Stap 2: Maak een purchase_order_item aan
-      const { error: itemError } = await supabase
-        .from("purchase_order_items")
-        .insert([{
-          purchase_order_id: orderId,
-          product_id: product.id,
-          quantity: qty,
-          units_per_box: upb,
-          actual_quantity: actual,
-          unit_price: price,
-          line_total: line,
-        }]);
-      
-      if (itemError) throw itemError;
-
-      // Stap 3: Update voorraad
-      const newStock = (product.stock_quantity ?? 0) + actual;
-      const { error: stockError } = await supabase
-        .from("products")
-        .update({ stock_quantity: newStock })
-        .eq("id", product.id);
-      
-      if (stockError) throw stockError;
-
-      // Reset form
-      setManualProductId("");
-      setManualQty(1);
-      setManualUPB(1);
-      setManualUnitPrice(0);
-      setManualSearch("");
-      
-      setNotification(`✓ ${actual} ${product.unit === "KILO" ? "kg" : "st."} ${product.name} toegevoegd!`);
-      
-      // Reload data
-      await loadProducts();
-      await loadOrders();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Fout bij toevoegen product";
-      setError(msg);
-      setNotification("✗ " + msg);
-      console.error(e);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // ---------- Opslaan ----------
-  async function savePurchaseOrder() {
-    if (items.length === 0) {
-      setNotification("Voeg minimaal 1 product toe");
-      return;
-    }
-    if (unmatchedItems.length > 0) {
-      const confirm = window.confirm(`Er zijn nog ${unmatchedItems.length} producten niet gekoppeld. Toch opslaan?`);
-      if (!confirm) return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      const totalAmount = items.reduce((sum, item) => sum + item.line_total, 0);
-      const { data: order, error: orderError } = await supabase
-        .from("purchase_orders")
-        .insert([{ supplier: supplier.trim() || null, total_amount: totalAmount }])
-        .select("id")
-        .single();
-      if (orderError) throw orderError;
-      const orderId = (order as { id: string }).id;
-
-      const itemsToInsert = items.map((item) => ({
-        purchase_order_id: orderId,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        units_per_box: item.units_per_box,
-        actual_quantity: item.actual_quantity,
-        unit_price: item.unit_price,
-        line_total: item.line_total,
-      }));
-      const { error: itemsError } = await supabase.from("purchase_order_items").insert(itemsToInsert);
-      if (itemsError) throw itemsError;
-
-      // Voorraad ophogen
-      for (const item of items) {
-        const product = products.find((p) => p.id === item.product_id);
-        if (product) {
-          const newStock = (product.stock_quantity ?? 0) + item.actual_quantity;
-          const { error: stockError } = await supabase
-            .from("products")
-            .update({ stock_quantity: newStock })
-            .eq("id", item.product_id);
-          if (stockError) console.error("Fout bij updaten voorraad:", stockError);
-        }
-      }
-
-      setItems([]);
-      setUnmatchedItems([]);
-      setSupplier("");
-      setUploadedImage(null);
-      setNotification("✓ Pakbon succesvol opgeslagen!");
-      await loadProducts();
-      await loadOrders();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Er is iets misgegaan";
-      setError(msg);
-      console.error(e);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // ---------- AI scan ----------
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  // ---------- Image scanning ----------
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setNotification("Upload alleen afbeeldingen (JPG, PNG, etc.)");
-      return;
-    }
 
     setProcessing(true);
-    setNotification("Bezig met AI verwerking...");
+    setError(null);
 
     try {
-      const base64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const result = event.target?.result as string;
-          setUploadedImage(result);
-          resolve(result);
-        };
-        reader.readAsDataURL(file);
-      });
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64 = event.target?.result as string;
+        setUploadedImage(base64);
 
-      const productNames = products.map((p) => p.name).join(", ");
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `Je bent een assistent voor een groenteboer. Analyseer deze pakbon/leveringsbon en extraheer:
+1. ALLE producten met hun aantallen (aantal dozen/pakken)
+2. Het TOTAALBEDRAG (onderaan de bon, meestal "Totaal" of "Te betalen")
+3. Geef voor elk product een confidence score (0-1) over hoe zeker je bent van de match
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: `Je bent een pakbon scanner. Analyseer deze pakbon en extraheer ALLE producten met hun aantallen en prijzen.
+Retourneer alleen JSON in dit formaat:
+{
+  "items": [
+    {"product_name": "naam", "quantity": aantal, "confidence": 0.95}
+  ],
+  "total_amount": 123.45
+}
 
-Bekende producten in ons systeem: ${productNames}
+Let op:
+- Hoeveelheden kunnen zijn: "2x", "3 st", "5 doos", etc.
+- Probeer productnamen te normaliseren (bijv. "Tomaten" i.p.v. "Tom.")
+- Als je onzeker bent over een product, geef lagere confidence (<0.7)
+- Als geen totaalbedrag zichtbaar is, zet total_amount op 0`,
+                },
+                {
+                  type: "image_url",
+                  image_url: { url: base64 },
+                },
+              ],
+            },
+          ],
+          max_tokens: 1000,
+        });
 
-Geef het resultaat terug als JSON array met deze structuur:
-[
-  { "product_name": "exacte productnaam van pakbon", "quantity": aantal_op_pakbon (als nummer), "price": prijs_per_stuk (als nummer) }
-]
-
-BELANGRIJK:
-- Zoek ALLE producten in de tabel/lijst
-- Gebruik de EXACTE naam zoals op de pakbon staat
-- Quantity is het eerste getal in de kolom (aantal op pakbon)
-- Price is de prijs per stuk in de "Prijs" kolom
-- Als er "12" staat bij aantal en "1" bij inhoud, neem dan 1 als quantity (niet 12)
-- Retourneer ALLEEN de JSON, geen extra tekst` },
-              { type: "image_url", image_url: { url: base64 } },
-            ],
-          },
-        ],
-        max_tokens: 1500,
-      });
-
-      const content = response.choices[0].message.content;
-      if (!content) throw new Error("Geen response van AI");
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) throw new Error("Geen geldige JSON gevonden in response");
-
-      const scannedItems: ScannedItem[] = JSON.parse(jsonMatch[0]);
-      const newItems: PurchaseItem[] = [];
-      const newUnmatched: UnmatchedItem[] = [];
-      for (const scanned of scannedItems) {
-        let product = products.find((p) => p.name.toLowerCase() === scanned.product_name.toLowerCase());
-        if (!product) {
-          product = products.find(
-            (p) => p.name.toLowerCase().includes(scanned.product_name.toLowerCase()) ||
-                   scanned.product_name.toLowerCase().includes(p.name.toLowerCase())
-          );
+        const content = response.choices[0]?.message?.content?.trim() || "";
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        
+        if (!jsonMatch) {
+          throw new Error("Geen geldige JSON teruggekregen van AI");
         }
-        if (product) {
-          newItems.push({
-            product_id: product.id,
-            product_name: product.name,
-            quantity: scanned.quantity,
-            units_per_box: 1,
-            actual_quantity: scanned.quantity * 1,
-            unit_price: scanned.price,
-            line_total: Math.round(scanned.quantity * 1 * scanned.price * 100) / 100,
-            matched: true,
-          });
-        } else {
-          const suggestions = findSimilarProducts(scanned.product_name);
-          newUnmatched.push({ scanned_name: scanned.product_name, quantity: scanned.quantity, price: scanned.price, suggestions });
+
+        const parsed = JSON.parse(jsonMatch[0]);
+        const scannedItems: ScannedItem[] = parsed.items || [];
+        const scannedTotal = parsed.total_amount || 0;
+
+        // Zet totaal bedrag
+        setTotalAmount(scannedTotal);
+
+        // Match producten
+        const matched: PurchaseItem[] = [];
+        const unmatched: UnmatchedItem[] = [];
+
+        for (const scanned of scannedItems) {
+          const bestMatch = findBestMatch(scanned.product_name);
+          const confidence = scanned.confidence >= 0.7 ? "high" : "low";
+
+          if (bestMatch && scanned.confidence >= 0.7) {
+            // Hoge confidence - automatisch matchen
+            matched.push({
+              product_id: bestMatch.id,
+              product_name: bestMatch.name,
+              quantity: scanned.quantity,
+              units_per_box: 1,
+              actual_quantity: scanned.quantity,
+              matched: true,
+              confidence: "high",
+            });
+          } else {
+            // Lage confidence - gebruiker moet kiezen
+            const suggestions = findSimilarProducts(scanned.product_name, 5);
+            unmatched.push({
+              scanned_name: scanned.product_name,
+              quantity: scanned.quantity,
+              suggestions,
+            });
+          }
         }
-      }
-      setItems(newItems);
-      setUnmatchedItems(newUnmatched);
-      if (newUnmatched.length > 0) setNotification(`✓ ${newItems.length} producten herkend. ${newUnmatched.length} producten hebben handmatige koppeling nodig.`);
-      else setNotification(`✓ ${newItems.length} producten herkend! Vul de "Stuks per pak" in.`);
-    } catch (err) {
-      console.error("AI fout:", err);
-      setNotification("Fout bij verwerken. Probeer opnieuw of voer handmatig in.");
+
+        setItems(matched);
+        setUnmatchedItems(unmatched);
+        setNotification(`${matched.length} producten herkend, ${unmatched.length} ter controle`);
+      };
+
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      setError(err.message || "Fout bij verwerken foto");
     } finally {
       setProcessing(false);
     }
   }
 
-  function clearScan() {
-    setUploadedImage(null);
-    setItems([]);
-    setUnmatchedItems([]);
+  // ---------- Product matching ----------
+  function findBestMatch(scannedName: string): Product | null {
+    const normalized = scannedName.toLowerCase().trim();
+    
+    // Exacte match
+    let match = products.find((p) => 
+      p.name.toLowerCase().trim() === normalized
+    );
+    if (match) return match;
+
+    // Bevat match
+    match = products.find((p) => 
+      p.name.toLowerCase().includes(normalized) || 
+      normalized.includes(p.name.toLowerCase())
+    );
+    if (match) return match;
+
+    // Fuzzy match op eerste woord
+    const firstWord = normalized.split(/\s+/)[0];
+    match = products.find((p) => 
+      p.name.toLowerCase().startsWith(firstWord) ||
+      firstWord.startsWith(p.name.toLowerCase().split(/\s+/)[0])
+    );
+    
+    return match || null;
   }
 
-  // ---------- Totals ----------
-  const totalAmount = items.reduce((sum, item) => sum + item.line_total, 0);
-  const btwAmount = totalAmount * 0.09;
-  const totalInclBtw = totalAmount * 1.09;
+  function findSimilarProducts(scannedName: string, limit: number): Product[] {
+    const normalized = scannedName.toLowerCase();
+    
+    const scored = products.map((p) => {
+      const productName = p.name.toLowerCase();
+      let score = 0;
 
-  // ---------- UI ----------
+      // Exacte match
+      if (productName === normalized) score += 100;
+      
+      // Bevat elkaar
+      if (productName.includes(normalized)) score += 50;
+      if (normalized.includes(productName)) score += 50;
+      
+      // Eerste woord match
+      const scanWords = normalized.split(/\s+/);
+      const prodWords = productName.split(/\s+/);
+      if (scanWords[0] === prodWords[0]) score += 30;
+      
+      // Levenshtein distance (simplified)
+      const maxLen = Math.max(normalized.length, productName.length);
+      const distance = levenshteinDistance(normalized, productName);
+      score += Math.max(0, 20 - (distance / maxLen) * 20);
+
+      return { product: p, score };
+    });
+
+    return scored
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((s) => s.product);
+  }
+
+  function levenshteinDistance(a: string, b: string): number {
+    const matrix: number[][] = [];
+
+    for (let i = 0; i <= b.length; i++) {
+      matrix[i] = [i];
+    }
+
+    for (let j = 0; j <= a.length; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        if (b.charAt(i - 1) === a.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+
+    return matrix[b.length][a.length];
+  }
+
+  // ---------- Item management ----------
+  function selectMatch(unmatchedIdx: number, product: Product) {
+    const unmatched = unmatchedItems[unmatchedIdx];
+    
+    const newItem: PurchaseItem = {
+      product_id: product.id,
+      product_name: product.name,
+      quantity: unmatched.quantity,
+      units_per_box: 1,
+      actual_quantity: unmatched.quantity,
+      matched: true,
+      confidence: "low", // Was onzeker, nu door gebruiker bevestigd
+    };
+
+    setItems([...items, newItem]);
+    setUnmatchedItems(unmatchedItems.filter((_, i) => i !== unmatchedIdx));
+    setNotification(`${product.name} toegevoegd`);
+  }
+
+  function skipUnmatched(idx: number) {
+    setUnmatchedItems(unmatchedItems.filter((_, i) => i !== idx));
+  }
+
+  function updateUnitsPerBox(idx: number, value: number) {
+    const updated = [...items];
+    updated[idx].units_per_box = value;
+    updated[idx].actual_quantity = updated[idx].quantity * value;
+    setItems(updated);
+  }
+
+  function updateActualQuantity(idx: number, value: number) {
+    const updated = [...items];
+    updated[idx].actual_quantity = value;
+    setItems(updated);
+  }
+
+  function removeItem(idx: number) {
+    setItems(items.filter((_, i) => i !== idx));
+  }
+
+  // Handmatig product toevoegen
+  function addManualProduct() {
+    if (!manualProductId) {
+      setError("Selecteer een product");
+      return;
+    }
+
+    const product = products.find((p) => p.id === manualProductId);
+    if (!product) return;
+
+    const actualQty = manualQty * manualUPB;
+
+    const newItem: PurchaseItem = {
+      product_id: product.id,
+      product_name: product.name,
+      quantity: manualQty,
+      units_per_box: manualUPB,
+      actual_quantity: actualQty,
+      matched: true,
+      confidence: "high",
+    };
+
+    setItems([...items, newItem]);
+    setManualProductId("");
+    setManualQty(1);
+    setManualUPB(1);
+    setManualSearch("");
+    setNotification(`${product.name} handmatig toegevoegd`);
+  }
+
+  // ---------- Save ----------
+  async function savePurchaseOrder() {
+    if (items.length === 0) {
+      setError("Voeg minimaal 1 product toe");
+      return;
+    }
+
+    if (totalAmount <= 0) {
+      setError("Voer een totaalbedrag in");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      // Maak purchase order
+      const { data: orderData, error: orderError } = await supabase
+        .from("purchase_orders")
+        .insert({
+          supplier: supplier || null,
+          total_amount: totalAmount,
+        })
+        .select("id")
+        .single();
+
+      if (orderError) throw orderError;
+
+      const orderId = orderData.id;
+
+      // Voeg items toe (zonder individuele prijzen)
+      const orderItems = items.map((item) => ({
+        purchase_order_id: orderId,
+        product_id: item.product_id,
+        quantity: item.quantity,
+        units_per_box: item.units_per_box,
+        actual_quantity: item.actual_quantity,
+      }));
+
+      const { error: itemsError } = await supabase
+        .from("purchase_order_items")
+        .insert(orderItems);
+
+      if (itemsError) throw itemsError;
+
+      // Update voorraad
+      for (const item of items) {
+        const { data: productData } = await supabase
+          .from("products")
+          .select("stock_quantity")
+          .eq("id", item.product_id)
+          .single();
+
+        if (productData) {
+          const newStock = (productData.stock_quantity ?? 0) + item.actual_quantity;
+          await supabase
+            .from("products")
+            .update({ stock_quantity: newStock })
+            .eq("id", item.product_id);
+        }
+      }
+
+      setNotification("Pakbon succesvol opgeslagen!");
+      
+      // Reset form
+      setItems([]);
+      setUnmatchedItems([]);
+      setSupplier("");
+      setTotalAmount(0);
+      setUploadedImage(null);
+      
+      loadOrders();
+      loadProducts();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ---------- Computed ----------
+  const filteredProducts = useMemo(() => {
+    if (!manualSearch) return products;
+    const search = manualSearch.toLowerCase();
+    return products.filter((p) => p.name.toLowerCase().includes(search));
+  }, [products, manualSearch]);
+
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <div className="mx-auto max-w-6xl">
-        <h1 className="text-3xl font-bold text-slate-900 mb-6">Inkoop / Pakbonnen</h1>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-orange-50 to-red-50 p-4 md:p-6">
+      <div className="mx-auto max-w-6xl space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-slate-900">Inkoop</h1>
+        </div>
 
-        {error && <p className="text-red-600 text-sm mb-3 font-medium">Fout: {error}</p>}
+        {/* Notifications */}
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+            <p className="text-red-800 font-medium">{error}</p>
+          </div>
+        )}
         {notification && (
-          <div className="fixed top-4 right-4 z-[100] bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white px-6 py-3 rounded-xl shadow-2xl font-semibold animate-[slideIn_0.3s_ease-out]">
-            {notification}
+          <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+            <p className="text-green-800 font-medium">{notification}</p>
           </div>
         )}
 
-        {/* Handmatig toevoegen */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm mb-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-1">Handmatig product toevoegen</h2>
-          <p className="text-sm text-slate-600 mb-4">Vul de gegevens in en klik op "Direct toevoegen" om het product meteen op te slaan</p>
-          <div className="grid gap-3 md:grid-cols-5">
+        {/* Upload sectie */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-900 mb-4">Pakbon scannen</h2>
+          
+          <label className="block cursor-pointer">
+            <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-green-400 hover:bg-green-50 transition">
+              {processing ? (
+                <div className="text-slate-600">
+                  <div className="animate-spin inline-block w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full mb-2"></div>
+                  <p>Pakbon analyseren...</p>
+                </div>
+              ) : uploadedImage ? (
+                <div>
+                  <p className="text-green-600 font-medium mb-2">✓ Pakbon geüpload</p>
+                  <p className="text-sm text-slate-600">Upload opnieuw om te vervangen</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-slate-900 font-medium mb-1">📸 Foto van pakbon uploaden</p>
+                  <p className="text-sm text-slate-600">De AI herkent automatisch producten en bedragen</p>
+                </div>
+              )}
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+              disabled={processing}
+            />
+          </label>
+
+          {uploadedImage && (
+            <div className="mt-4">
+              <img src={uploadedImage} alt="Pakbon" className="max-w-full max-h-64 mx-auto rounded-lg border border-gray-200" />
+            </div>
+          )}
+        </div>
+
+        {/* Handmatig product toevoegen */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-900 mb-4">Handmatig product toevoegen</h2>
+          
+          <div className="grid md:grid-cols-5 gap-4">
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Product</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Zoek product</label>
               <input
                 type="text"
-                placeholder="Zoek product…"
                 value={manualSearch}
                 onChange={(e) => setManualSearch(e.target.value)}
-                className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-400 mb-2"
+                placeholder="Type om te zoeken..."
+                className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-400"
               />
-              <select
-                value={manualProductId}
-                onChange={(e) => setManualProductId(e.target.value)}
-                className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900"
-              >
-                <option value="">— Kies een product —</option>
-                {filteredProducts.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} {p.unit === "KILO" ? "(kg)" : "(st)"}
-                  </option>
-                ))}
-              </select>
+              {manualSearch && filteredProducts.length > 0 && (
+                <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded">
+                  {filteredProducts.slice(0, 10).map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setManualProductId(p.id);
+                        setManualSearch(p.name);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-green-50 text-sm border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="font-medium text-slate-900">{p.name}</div>
+                      <div className="text-xs text-slate-500">{p.unit} • Voorraad: {p.stock_quantity ?? 0}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Aantal (pakbon)</label>
               <input
                 type="number"
-                min={1}
-                step={1}
+                min="1"
+                step="1"
                 value={manualQty}
-                onChange={(e) => setManualQty(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+                onChange={(e) => setManualQty(Number(e.target.value))}
                 className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900"
               />
             </div>
+
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Stuks per pak</label>
               <input
                 type="number"
-                min={1}
-                step={1}
+                min="1"
+                step="1"
                 value={manualUPB}
-                onChange={(e) => setManualUPB(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+                onChange={(e) => setManualUPB(Number(e.target.value))}
                 className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Prijs/st (€)</label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={manualUnitPrice}
-                onChange={(e) => setManualUnitPrice(Math.max(0, Number(e.target.value) || 0))}
-                className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900"
-              />
+
+            <div className="flex items-end">
+              <button
+                onClick={addManualProduct}
+                disabled={!manualProductId}
+                className="w-full py-2 rounded bg-green-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-600 transition"
+              >
+                Toevoegen
+              </button>
             </div>
-          </div>
-          <div className="mt-3 flex justify-end">
-            <button
-              onClick={addManualItem}
-              disabled={saving}
-              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-md"
-            >
-              {saving ? "Bezig met opslaan..." : "✓ Direct toevoegen"}
-            </button>
           </div>
         </div>
 
-        {/* Upload sectie */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm mb-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-3">Pakbon scannen met AI</h2>
-          <p className="text-sm text-slate-600 mb-4">Upload een foto of scan van je pakbon. AI herkent automatisch alle producten, aantallen en prijzen.</p>
-          <div className="flex items-center gap-3">
-            <label className="flex-1 cursor-pointer">
-              <input type="file" accept="image/*" onChange={handleFileUpload} disabled={processing} className="hidden" />
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 hover:bg-blue-50 transition">
-                <div className="text-4xl mb-2">🤖📄</div>
-                <div className="text-sm font-medium text-slate-900">{processing ? "AI is bezig met analyseren..." : "Klik om pakbon te uploaden"}</div>
-                <div className="text-xs text-slate-500 mt-1">JPG of PNG • AI powered</div>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        {/* Preview */}
-        {uploadedImage && (
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Gescande pakbon</h3>
-              <button onClick={clearScan} className="text-sm text-red-600 hover:text-red-700 font-medium">Wissen</button>
-            </div>
-            <img src={uploadedImage} alt="Pakbon scan" className="w-full max-w-2xl mx-auto rounded-lg border border-gray-200" />
-          </div>
-        )}
-
-        {/* Onbekende producten - matching nodig */}
+        {/* Onzekere matches ter controle */}
         {unmatchedItems.length > 0 && (
-          <div className="rounded-2xl border-2 border-orange-300 bg-orange-50 p-6 shadow-sm mb-6">
-            <h2 className="text-xl font-semibold text-orange-900 mb-4">⚠️ Producten koppelen ({unmatchedItems.length})</h2>
-            <p className="text-sm text-orange-700 mb-4">Deze producten zijn herkend maar niet automatisch gekoppeld. Kies het juiste product uit de suggesties:</p>
+          <div className="rounded-2xl border border-orange-200 bg-orange-50 p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-orange-900 mb-2">⚠️ Producten ter controle ({unmatchedItems.length})</h2>
+            <p className="text-sm text-orange-700 mb-4">De AI was onzeker over deze producten. Selecteer het juiste product of sla over.</p>
+            
             <div className="space-y-4">
               {unmatchedItems.map((unmatched, idx) => (
-                <div key={idx} className="rounded-lg border border-orange-200 bg-white p-4">
-                  <div className="flex items-start justify-between mb-3">
+                <div key={idx} className="rounded-xl border border-orange-300 bg-white p-4">
+                  <div className="flex items-center justify-between mb-3">
                     <div>
-                      <div className="font-bold text-slate-900 text-lg">"{unmatched.scanned_name}"</div>
-                      <div className="text-sm text-slate-600">Aantal: {unmatched.quantity} • Prijs: € {unmatched.price.toFixed(2)}</div>
+                      <div className="font-semibold text-slate-900 text-lg">{unmatched.scanned_name}</div>
+                      <div className="text-sm text-slate-600">Aantal: {unmatched.quantity}</div>
                     </div>
                     <button onClick={() => skipUnmatched(idx)} className="text-sm text-slate-500 hover:text-slate-700">Overslaan</button>
                   </div>
@@ -680,14 +716,29 @@ BELANGRIJK:
         {items.length > 0 && (
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-slate-900">Herkende producten ({items.length})</h2>
-              <p className="text-sm text-slate-600">Pas "Stuks per pak" of "Totaal stuks" aan</p>
+              <h2 className="text-xl font-semibold text-slate-900">Producten op pakbon ({items.length})</h2>
+              <p className="text-sm text-slate-600">Pas aantallen aan indien nodig</p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Leverancier (optioneel)</label>
                 <input type="text" value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="bijv. Fresh Food Centraal" className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-400" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Totaalbedrag pakbon (€) <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="number" 
+                  min="0" 
+                  step="0.01" 
+                  value={totalAmount} 
+                  onChange={(e) => setTotalAmount(Number(e.target.value))} 
+                  placeholder="123.45" 
+                  className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-400 font-semibold text-lg"
+                />
               </div>
             </div>
 
@@ -696,11 +747,10 @@ BELANGRIJK:
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-3 py-2 text-left text-slate-900 font-semibold">Product</th>
+                    <th className="px-3 py-2 text-left text-slate-900 font-semibold">Status</th>
                     <th className="px-3 py-2 text-left text-slate-900 font-semibold">Aantal (pakbon)</th>
                     <th className="px-3 py-2 text-left text-slate-900 font-semibold">Stuks per pak</th>
                     <th className="px-3 py-2 text-left text-slate-900 font-semibold">Totaal stuks</th>
-                    <th className="px-3 py-2 text-left text-slate-900 font-semibold">Prijs/st (€)</th>
-                    <th className="px-3 py-2 text-left text-slate-900 font-semibold">Subtotaal (€)</th>
                     <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
@@ -708,6 +758,17 @@ BELANGRIJK:
                   {items.map((item, idx) => (
                     <tr key={idx} className="border-t border-gray-200">
                       <td className="px-3 py-2 text-slate-900 font-medium">{item.product_name}</td>
+                      <td className="px-3 py-2">
+                        {item.confidence === "high" ? (
+                          <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                            ✓ Zeker
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                            ⚠ Handmatig
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-slate-700">{item.quantity}</td>
                       <td className="px-3 py-2">
                         <input type="number" min="1" step="1" value={item.units_per_box} onChange={(e) => updateUnitsPerBox(idx, Number(e.target.value))} className="w-20 border border-gray-300 rounded px-2 py-1 bg-white text-slate-900" />
@@ -715,36 +776,24 @@ BELANGRIJK:
                       <td className="px-3 py-2">
                         <input type="number" min="1" step="1" value={item.actual_quantity} onChange={(e) => updateActualQuantity(idx, Number(e.target.value))} className="w-20 border border-gray-300 rounded px-2 py-1 bg-white text-slate-900 font-semibold" />
                       </td>
-                      <td className="px-3 py-2 text-slate-700">€ {item.unit_price.toFixed(2)}</td>
-                      <td className="px-3 py-2 text-slate-900 font-semibold">€ {item.line_total.toFixed(2)}</td>
                       <td className="px-3 py-2">
                         <button onClick={() => removeItem(idx)} className="text-sm text-red-600 hover:text-red-700 font-medium">✕</button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-gray-50">
-                  <tr className="border-t border-gray-200">
-                    <td colSpan={5} className="px-3 py-2 text-right text-slate-700">Subtotaal:</td>
-                    <td className="px-3 py-2 text-slate-900 font-semibold">€ {totalAmount.toFixed(2)}</td>
-                    <td></td>
-                  </tr>
-                  <tr className="border-t border-gray-200">
-                    <td colSpan={5} className="px-3 py-2 text-right text-slate-700">BTW (9%):</td>
-                    <td className="px-3 py-2 text-slate-900 font-semibold">€ {btwAmount.toFixed(2)}</td>
-                    <td></td>
-                  </tr>
-                  <tr className="border-t-2 border-gray-300">
-                    <td colSpan={5} className="px-3 py-2 text-right text-slate-900 font-bold text-base">Totaal incl. BTW:</td>
-                    <td className="px-3 py-2 text-slate-900 font-bold text-base">€ {totalInclBtw.toFixed(2)}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
               </table>
             </div>
 
-            <button onClick={savePurchaseOrder} disabled={saving} className="w-full py-3 rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold disabled:opacity-50 hover:brightness-110 transition shadow-md">
-              {saving ? "Opslaan…" : unmatchedItems.length > 0 ? `Opslaan (${unmatchedItems.length} niet gekoppeld)` : "Pakbon opslaan"}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+              <div className="text-lg">
+                <span className="text-slate-600">Totaalbedrag pakbon:</span>
+                <span className="ml-2 text-2xl font-bold text-slate-900">€ {totalAmount.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <button onClick={savePurchaseOrder} disabled={saving || totalAmount <= 0} className="w-full py-3 rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold disabled:opacity-50 hover:brightness-110 transition shadow-md">
+              {saving ? "Opslaan…" : unmatchedItems.length > 0 ? `Opslaan (${unmatchedItems.length} nog ter controle)` : "Pakbon opslaan"}
             </button>
           </div>
         )}
@@ -792,8 +841,6 @@ BELANGRIJK:
                     <th className="px-3 py-2 text-left text-slate-900 font-semibold">Aantal (pakbon)</th>
                     <th className="px-3 py-2 text-left text-slate-900 font-semibold">Stuks per pak</th>
                     <th className="px-3 py-2 text-left text-slate-900 font-semibold">Totaal stuks</th>
-                    <th className="px-3 py-2 text-left text-slate-900 font-semibold">Prijs/st (€)</th>
-                    <th className="px-3 py-2 text-left text-slate-900 font-semibold">Subtotaal (€)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -803,17 +850,9 @@ BELANGRIJK:
                       <td className="px-3 py-2 text-slate-700">{item.quantity}</td>
                       <td className="px-3 py-2 text-slate-700">{item.units_per_box}</td>
                       <td className="px-3 py-2 text-slate-900 font-semibold">{item.actual_quantity}</td>
-                      <td className="px-3 py-2 text-slate-700">€ {item.unit_price.toFixed(2)}</td>
-                      <td className="px-3 py-2 text-slate-900 font-semibold">€ {item.line_total.toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-gray-50 border-t-2 border-gray-300">
-                  <tr>
-                    <td colSpan={5} className="px-3 py-2 text-right text-slate-900 font-semibold">Totaal:</td>
-                    <td className="px-3 py-2 text-slate-900 font-bold">€ {selectedOrderItems.reduce((s, i) => s + i.line_total, 0).toFixed(2)}</td>
-                  </tr>
-                </tfoot>
               </table>
             </div>
           </div>
