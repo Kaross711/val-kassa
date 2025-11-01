@@ -34,8 +34,8 @@ type PurchaseOrder = {
 
 type ProductStats = {
   product_name: string;
-  total_revenue: number;
   total_quantity: number;
+  total_revenue: number;
   unit: string;
 };
 
@@ -48,49 +48,34 @@ export default function VerkoopPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Totalen
+  // Totalen en statistieken
   const [totalSales, setTotalSales] = useState(0);
   const [totalPurchases, setTotalPurchases] = useState(0);
-  
-  // Nieuwe analytics
+  const [productStats, setProductStats] = useState<ProductStats[]>([]);
   const [avgTransactionValue, setAvgTransactionValue] = useState(0);
-  const [topProducts, setTopProducts] = useState<ProductStats[]>([]);
+  const [transactionCount, setTransactionCount] = useState(0);
   const [dailyRevenue, setDailyRevenue] = useState<{date: string, revenue: number}[]>([]);
-
-  // Functie om maandag van deze week te krijgen
-  function getMonday(date: Date): Date {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Zondag = 0, dus trek 6 af
-    return new Date(d.setDate(diff));
-  }
-
-  // Functie om zondag van deze week te krijgen
-  function getSunday(date: Date): Date {
-    const monday = getMonday(date);
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    return sunday;
-  }
 
   function rangeStartISO(r: Range) {
     const now = new Date();
     
     if (r === "today") {
-      // Vandaag vanaf 00:00 lokale tijd
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
       return start.toISOString();
     }
     
     if (r === "thisWeek") {
-      // Maandag van deze week om 00:00
-      const monday = getMonday(now);
-      monday.setHours(0, 0, 0, 0);
-      return monday.toISOString();
+      // Maandag van deze week vanaf 00:00
+      const start = new Date(now);
+      const day = start.getDay(); // 0 = zondag, 1 = maandag, etc.
+      const diff = day === 0 ? -6 : 1 - day; // Als zondag, ga 6 dagen terug, anders naar maandag
+      start.setDate(start.getDate() + diff);
+      start.setHours(0, 0, 0, 0);
+      return start.toISOString();
     }
     
     if (r === "thisMonth") {
-      // Eerste dag van deze maand om 00:00
+      // Eerste dag van deze maand vanaf 00:00
       const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
       return start.toISOString();
     }
@@ -99,28 +84,31 @@ export default function VerkoopPage() {
   }
 
   function rangeEndISO(r: Range) {
-    const now = new Date();
-    
     if (r === "today") {
-      // Vandaag tot 23:59:59
+      const now = new Date();
       const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
       return end.toISOString();
     }
     
     if (r === "thisWeek") {
-      // Zondag van deze week om 23:59:59
-      const sunday = getSunday(now);
-      sunday.setHours(23, 59, 59, 999);
-      return sunday.toISOString();
+      // Zondag van deze week tot 23:59:59
+      const now = new Date();
+      const day = now.getDay();
+      const diff = day === 0 ? 0 : 7 - day; // Als zondag, blijf, anders naar zondag
+      const end = new Date(now);
+      end.setDate(end.getDate() + diff);
+      end.setHours(23, 59, 59, 999);
+      return end.toISOString();
     }
     
     if (r === "thisMonth") {
-      // Laatste dag van deze maand om 23:59:59
+      // Laatste dag van deze maand tot 23:59:59
+      const now = new Date();
       const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
       return end.toISOString();
     }
     
-    return null; // Voor 'all' geen eind-datum
+    return null;
   }
 
   function rangeStartDate(r: Range): string | null {
@@ -131,8 +119,11 @@ export default function VerkoopPage() {
     }
     
     if (r === "thisWeek") {
-      const monday = getMonday(now);
-      return monday.toISOString().slice(0, 10);
+      const start = new Date(now);
+      const day = start.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      start.setDate(start.getDate() + diff);
+      return start.toISOString().slice(0, 10);
     }
     
     if (r === "thisMonth") {
@@ -151,8 +142,11 @@ export default function VerkoopPage() {
     }
     
     if (r === "thisWeek") {
-      const sunday = getSunday(now);
-      return sunday.toISOString().slice(0, 10);
+      const day = now.getDay();
+      const diff = day === 0 ? 0 : 7 - day;
+      const end = new Date(now);
+      end.setDate(end.getDate() + diff);
+      return end.toISOString().slice(0, 10);
     }
     
     if (r === "thisMonth") {
@@ -189,8 +183,8 @@ export default function VerkoopPage() {
       setTotalSales(sales);
       
       // Bereken gemiddelde transactiewaarde
-      const avg = receiptData.length > 0 ? sales / receiptData.length : 0;
-      setAvgTransactionValue(avg);
+      setTransactionCount(receiptData.length);
+      setAvgTransactionValue(receiptData.length > 0 ? sales / receiptData.length : 0);
       
       // Bereken dagelijkse omzet voor grafiek
       const dailyMap = new Map<string, number>();
@@ -204,7 +198,6 @@ export default function VerkoopPage() {
         .sort((a, b) => a.date.localeCompare(b.date));
       
       setDailyRevenue(dailyData);
-      
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Fout bij laden bonnen";
       setError(msg);
@@ -235,34 +228,25 @@ export default function VerkoopPage() {
       const dailyData = (data ?? []) as DailySale[];
       setDaily(dailyData);
       
-      // Bereken top producten
-      const productMap = new Map<string, { revenue: number; quantity: number; unit: string }>();
-      
-      dailyData.forEach(sale => {
-        const existing = productMap.get(sale.product_name);
+      // Bereken product statistieken
+      const productMap = new Map<string, ProductStats>();
+      dailyData.forEach(d => {
+        const existing = productMap.get(d.product_name);
         if (existing) {
-          existing.revenue += sale.total_revenue;
-          existing.quantity += sale.total_amount;
+          existing.total_quantity += d.total_amount;
+          existing.total_revenue += d.total_revenue;
         } else {
-          productMap.set(sale.product_name, {
-            revenue: sale.total_revenue,
-            quantity: sale.total_amount,
-            unit: sale.unit
+          productMap.set(d.product_name, {
+            product_name: d.product_name,
+            total_quantity: d.total_amount,
+            total_revenue: d.total_revenue,
+            unit: d.unit
           });
         }
       });
       
-      const topProds = Array.from(productMap.entries())
-        .map(([name, stats]) => ({
-          product_name: name,
-          total_revenue: stats.revenue,
-          total_quantity: stats.quantity,
-          unit: stats.unit
-        }))
-        .sort((a, b) => b.total_revenue - a.total_revenue)
-        .slice(0, 5);
-      
-      setTopProducts(topProds);
+      const stats = Array.from(productMap.values()).sort((a, b) => b.total_revenue - a.total_revenue);
+      setProductStats(stats);
     }
   }
 
@@ -311,9 +295,9 @@ export default function VerkoopPage() {
 
   return (
       <div className="p-4 md:p-6 space-y-6">
-        <div className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-7xl">
           <div className="flex items-center justify-between mb-2 gap-3">
-            <h1 className="text-3xl font-bold text-slate-900">Verkoop</h1>
+            <h1 className="text-3xl font-bold text-slate-900">Verkoop Dashboard</h1>
             <div className="flex items-center gap-2">
               {(["today", "thisWeek", "thisMonth", "all"] as const).map((k) => (
                   <button
@@ -325,7 +309,7 @@ export default function VerkoopPage() {
                               : "border-gray-300 bg-white hover:bg-gray-50 text-slate-700"
                       }`}
                   >
-                    {k === "today" ? "Vandaag" : k === "thisWeek" ? "Deze week" : k === "thisMonth" ? "Deze maand" : "Alles"}
+                    {k === "today" ? "Vandaag" : k === "thisWeek" ? "Deze Week" : k === "thisMonth" ? "Deze Maand" : "Alles"}
                   </button>
               ))}
             </div>
@@ -334,13 +318,13 @@ export default function VerkoopPage() {
 
         {error && <p className="text-red-600 text-sm font-medium">{error}</p>}
 
-        {/* Totalen bovenaan - uitgebreid */}
-        <section className="mx-auto max-w-6xl">
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Hoofd KPI's */}
+        <section className="mx-auto max-w-7xl">
+          <div className="grid md:grid-cols-4 gap-4">
             <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-green-50 to-green-100 p-4 shadow-sm">
-              <div className="text-sm text-green-700 font-medium mb-1">Totale Verkoop</div>
+              <div className="text-sm text-green-700 font-medium mb-1">Totale Omzet</div>
               <div className="text-2xl font-bold text-green-900">€ {totalSales.toFixed(2)}</div>
-              <div className="text-xs text-green-600 mt-1">{receipts.length} bonnen</div>
+              <div className="text-xs text-green-600 mt-1">{transactionCount} transacties</div>
             </div>
             
             <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-orange-50 to-orange-100 p-4 shadow-sm">
@@ -356,7 +340,7 @@ export default function VerkoopPage() {
               <div className={`text-sm font-medium mb-1 ${
                   profit >= 0 ? "text-blue-700" : "text-red-700"
               }`}>
-                {profit >= 0 ? "Winst" : "Verlies"}
+                {profit >= 0 ? "Bruto Winst" : "Verlies"}
               </div>
               <div className={`text-2xl font-bold ${
                   profit >= 0 ? "text-blue-900" : "text-red-900"
@@ -369,17 +353,17 @@ export default function VerkoopPage() {
                 {profitMargin.toFixed(1)}% marge
               </div>
             </div>
-            
+
             <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-purple-50 to-purple-100 p-4 shadow-sm">
-              <div className="text-sm text-purple-700 font-medium mb-1">Gem. per bon</div>
+              <div className="text-sm text-purple-700 font-medium mb-1">Gem. Bonwaarde</div>
               <div className="text-2xl font-bold text-purple-900">€ {avgTransactionValue.toFixed(2)}</div>
             </div>
           </div>
         </section>
 
-        {/* Top 5 producten */}
-        <section className="mx-auto max-w-6xl">
-          <h2 className="text-xl font-semibold mb-2 text-slate-900">Top 5 Producten</h2>
+        {/* Top Producten */}
+        <section className="mx-auto max-w-7xl">
+          <h2 className="text-xl font-semibold mb-2 text-slate-900">Top Producten</h2>
           <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left">
@@ -387,24 +371,24 @@ export default function VerkoopPage() {
                 <th className="px-3 py-2 text-slate-900 font-semibold">Product</th>
                 <th className="px-3 py-2 text-slate-900 font-semibold">Verkocht</th>
                 <th className="px-3 py-2 text-slate-900 font-semibold">Omzet</th>
-                <th className="px-3 py-2 text-slate-900 font-semibold">% van totaal</th>
+                <th className="px-3 py-2 text-slate-900 font-semibold">Gem. Prijs</th>
               </tr>
               </thead>
               <tbody>
-              {topProducts.map((p, i) => {
-                const percentage = totalSales > 0 ? (p.total_revenue / totalSales) * 100 : 0;
+              {productStats.slice(0, 10).map((p, i) => {
+                const avgPrice = p.total_quantity > 0 ? p.total_revenue / p.total_quantity : 0;
                 return (
                   <tr key={i} className="border-t border-gray-200">
-                    <td className="px-3 py-2 text-slate-700 font-medium">{p.product_name}</td>
+                    <td className="px-3 py-2 text-slate-900 font-medium">{p.product_name}</td>
                     <td className="px-3 py-2 text-slate-700">
                       {p.total_quantity.toFixed(2)} {p.unit}
                     </td>
-                    <td className="px-3 py-2 text-slate-900 font-semibold">€ {p.total_revenue.toFixed(2)}</td>
-                    <td className="px-3 py-2 text-slate-700">{percentage.toFixed(1)}%</td>
+                    <td className="px-3 py-2 text-green-700 font-semibold">€ {p.total_revenue.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-slate-700">€ {avgPrice.toFixed(2)}</td>
                   </tr>
                 );
               })}
-              {topProducts.length === 0 && (
+              {productStats.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-3 py-4 text-center text-slate-600">
                       Geen data beschikbaar.
@@ -416,36 +400,71 @@ export default function VerkoopPage() {
           </div>
         </section>
 
-        {/* Dagelijkse omzet visualisatie */}
-        {dailyRevenue.length > 0 && (
-          <section className="mx-auto max-w-6xl">
-            <h2 className="text-xl font-semibold mb-2 text-slate-900">Omzet per dag</h2>
-            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="flex items-end gap-2 h-32">
-                {dailyRevenue.map((day, i) => {
-                  const maxRevenue = Math.max(...dailyRevenue.map(d => d.revenue));
-                  const height = maxRevenue > 0 ? (day.revenue / maxRevenue) * 100 : 0;
-                  
-                  return (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                      <div 
-                        className="w-full bg-gradient-to-t from-green-500 to-green-400 rounded-t"
-                        style={{ height: `${height}%` }}
-                        title={`€ ${day.revenue.toFixed(2)}`}
-                      />
-                      <div className="text-xs text-slate-600 rotate-45 origin-left whitespace-nowrap">
-                        {new Date(day.date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+        {/* Omzet grafiek */}
+        <section className="mx-auto max-w-7xl">
+          <h2 className="text-xl font-semibold mb-2 text-slate-900">Omzet per dag</h2>
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            {dailyRevenue.length > 0 ? (
+              <div className="space-y-4">
+                <div className="h-64 flex items-end justify-between gap-2">
+                  {dailyRevenue.map((day, i) => {
+                    const maxRevenue = Math.max(...dailyRevenue.map(d => d.revenue), 1);
+                    const heightPercent = (day.revenue / maxRevenue) * 100;
+                    const heightPx = (day.revenue / maxRevenue) * 200; // 200px max hoogte
+                    
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center justify-end h-full min-w-0 group">
+                        <div className="relative w-full mb-2">
+                          {/* Tooltip */}
+                          <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none shadow-lg">
+                            € {day.revenue.toFixed(2)}
+                          </div>
+                          
+                          {/* Balk */}
+                          <div 
+                            className="w-full bg-gradient-to-t from-green-600 via-green-500 to-green-400 rounded-t-lg hover:brightness-110 transition-all cursor-pointer shadow-sm"
+                            style={{ 
+                              height: `${Math.max(heightPx, 10)}px`,
+                              minHeight: '10px'
+                            }}
+                          />
+                        </div>
+                        
+                        {/* Datum label */}
+                        <div className="text-xs text-slate-600 text-center w-full truncate px-1">
+                          {new Date(day.date).toLocaleDateString('nl-NL', { 
+                            day: 'numeric', 
+                            month: 'short' 
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+                
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <div className="text-sm text-slate-600">
+                    Totaal over {dailyRevenue.length} {dailyRevenue.length === 1 ? 'dag' : 'dagen'}
+                  </div>
+                  <div className="text-lg font-bold text-slate-900">
+                    € {dailyRevenue.reduce((sum, d) => sum + d.revenue, 0).toFixed(2)}
+                  </div>
+                </div>
               </div>
-            </div>
-          </section>
-        )}
+            ) : (
+              <div className="text-center py-16 text-slate-500">
+                <svg className="w-16 h-16 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <p className="font-medium">Geen omzetdata beschikbaar</p>
+                <p className="text-sm mt-1">Voer verkopen in om data te zien</p>
+              </div>
+            )}
+          </div>
+        </section>
 
         {/* Dagoverzicht */}
-        <section className="mx-auto max-w-6xl">
+        <section className="mx-auto max-w-7xl">
           <h2 className="text-xl font-semibold mb-2 text-slate-900">Verkocht per dag</h2>
           <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
             <table className="min-w-full text-sm">
@@ -481,7 +500,7 @@ export default function VerkoopPage() {
         </section>
 
         {/* Bonnenlijst */}
-        <section className="mx-auto max-w-6xl">
+        <section className="mx-auto max-w-7xl">
           <h2 className="text-xl font-semibold mb-2 text-slate-900">Alle verkopen</h2>
           {loading ? (
               <p className="text-slate-600 text-sm">Laden…</p>
@@ -508,7 +527,7 @@ export default function VerkoopPage() {
                           }`}
                       >
                         <div className="font-semibold text-slate-900">
-                          {dateStr} — {timeStr}
+                          {dateStr} – {timeStr}
                         </div>
                         <div className="text-sm text-slate-600">€ {r.total_gross?.toFixed(2) ?? "0.00"}</div>
                       </button>
@@ -523,7 +542,7 @@ export default function VerkoopPage() {
 
         {/* Detailvenster */}
         {selected && (
-            <section className="mx-auto max-w-6xl">
+            <section className="mx-auto max-w-7xl">
               <h2 className="text-xl font-semibold mb-2 text-slate-900">
                 Bon-details
                 <button onClick={() => setSelected(null)} className="ml-3 text-sm text-green-600 hover:text-green-700 font-medium">
