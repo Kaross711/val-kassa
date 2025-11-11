@@ -148,13 +148,14 @@ export default function InkoopPage() {
         actual_quantity,
         products (name)
       `)
-            .eq("purchase_order_id", orderId);
+            .eq("purchase_order_id", orderId)
+            .returns<OrderItemRow[]>();
 
         if (error) {
             console.error("Fout bij laden pakbon details:", error);
             setError(error.message);
         } else {
-            const rows = (data ?? []) as OrderItemRow[];
+            const rows: OrderItemRow[] = data ?? [];
             const formattedItems = rows.map((item) => ({
                 product_name: item.products?.name || "Onbekend",
                 quantity: item.quantity,
@@ -512,12 +513,12 @@ Let op:
                     total_amount: totalAmount,
                 })
                 .select("id")
-                .single<ProductStock>();
+                .single<{ id: string }>();
 
             if (orderError) throw orderError;
             if (!orderData) throw new Error("Geen order aangemaakt");
 
-            const orderId = orderData.id;
+            const orderId: string = orderData.id;
 
             // Voeg items toe (zet unit_price & line_total default op 0 om NOT NULL te respecteren)
             const orderItems = items.map((item) => ({
