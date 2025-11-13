@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Unit = "KILO" | "STUK";
@@ -90,6 +90,9 @@ export default function KassaPage() {
     const [newProductPrice, setNewProductPrice] = useState("");
     const [newProductStock, setNewProductStock] = useState("");
 
+    // Ref voor auto-focus op input
+    const modalInputRef = useRef<HTMLInputElement>(null);
+
 
     // ---------- Data loading ----------
     async function loadProducts() {
@@ -164,6 +167,14 @@ export default function KassaPage() {
     useEffect(() => {
         if (modalOpen) {
             document.body.classList.add("overflow-hidden");
+            // Auto-focus op input veld na kleine delay (voor animatie)
+            setTimeout(() => {
+                if (modalInputRef.current && !editMode) {
+                    modalInputRef.current.focus();
+                    modalInputRef.current.select(); // Selecteer de inhoud direct
+                }
+            }, 100);
+
             const onKey = (e: KeyboardEvent) => {
                 if (e.key === "Escape") {
                     closeModal();
@@ -674,7 +685,7 @@ export default function KassaPage() {
                         {filtered.length === 0 ? (
                             <p className="text-slate-600">Geen producten gevonden.</p>
                         ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                                 {filtered.map((p) => {
                                     const hasPrice = p.price !== null && p.price !== undefined;
                                     const hasStock = p.stock_quantity !== null && p.stock_quantity !== undefined;
@@ -685,16 +696,19 @@ export default function KassaPage() {
                                         <div
                                             key={p.id}
                                             onClick={() => openModal(p)}
-                                            className="rounded-xl border border-gray-200 bg-white/90 backdrop-blur-sm p-4 shadow-sm hover:shadow-md transition cursor-pointer"
+                                            className="rounded-xl border-2 border-gray-200 bg-white/90 backdrop-blur-sm p-5 shadow-sm hover:shadow-lg hover:border-blue-400 transition cursor-pointer active:scale-95"
                                         >
-                                            <div className="font-semibold text-slate-900 mb-1 leading-tight break-words">
+                                            <div className="font-bold text-lg text-slate-900 mb-2 leading-tight break-words min-h-[3rem] flex items-center">
                                                 {p.name}
                                             </div>
-                                            <div className="text-sm text-slate-600">
-                                                {hasPrice ? `€ ${p.price!.toFixed(2)}` : "€ -.--"} / {p.unit}
+                                            <div className="text-base font-bold text-blue-600 mb-1">
+                                                {hasPrice ? `€ ${p.price!.toFixed(2)}` : "€ -.--"}
                                             </div>
-                                            <div className={`text-xs mt-1 ${isLowStock ? "text-red-600 font-bold" : "text-slate-500"}`}>
-                                                {hasStock ? `${stock} ${p.unit === "KILO" ? "kg" : "stuks"}` : "geen voorraad"}
+                                            <div className="text-xs text-slate-500">
+                                                per {p.unit}
+                                            </div>
+                                            <div className={`text-sm mt-2 font-semibold ${isLowStock ? "text-red-600" : "text-green-600"}`}>
+                                                {hasStock ? `${stock} ${p.unit === "KILO" ? "kg" : "st"}` : "geen voorraad"}
                                             </div>
                                         </div>
                                     );
@@ -798,49 +812,55 @@ export default function KassaPage() {
                     <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 max-w-md w-full mx-4">
                         {!editMode ? (
                             <>
-                                <h2 className="text-xl font-bold mb-2 text-slate-900">{modalProduct.name}</h2>
-                                <div className="text-slate-600 mb-1">
+                                <h2 className="text-2xl font-bold mb-3 text-slate-900">{modalProduct.name}</h2>
+                                <div className="text-lg text-slate-600 mb-2">
                                     € {toPrice(modalProduct.price).toFixed(2)} / {modalProduct.unit}
                                 </div>
-                                <div className="text-sm text-slate-500 mb-4">
+                                <div className="text-sm text-slate-500 mb-6">
                                     Voorraad:{" "}
                                     {modalProduct.stock_quantity !== null
                                         ? `${modalProduct.stock_quantity} ${modalProduct.unit === "KILO" ? "kg" : "stuks"}`
                                         : "onbekend"}
                                 </div>
 
-                                <label className="block text-sm font-medium mb-2 text-slate-700">
+                                <label className="block text-lg font-semibold mb-3 text-slate-900">
                                     Aantal {modalProduct.unit === "KILO" ? "(kg)" : "(stuks)"}
                                 </label>
                                 <input
+                                    ref={modalInputRef}
                                     type="number"
+                                    inputMode="decimal"
                                     step={modalProduct.unit === "KILO" ? "0.01" : "1"}
                                     min="0.01"
                                     value={modalValue}
                                     onChange={(e) => setModalValue(e.target.value)}
-                                    className="w-full border border-gray-300 rounded px-3 py-2 mb-4 text-slate-900"
+                                    className="w-full border-2 border-blue-400 rounded-xl px-4 py-4 mb-6 text-2xl font-bold text-center text-slate-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-200 transition"
                                 />
 
-                                <div className="flex gap-3">
+                                <div className="space-y-3">
+                                    {/* Extra grote Toevoegen knop */}
+                                    <button
+                                        onClick={confirmModal}
+                                        className="w-full px-6 py-5 text-xl rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-bold hover:brightness-110 transition shadow-lg"
+                                    >
+                                        ✓ Toevoegen aan winkelwagen
+                                    </button>
+
+                                    {/* Annuleren knop */}
                                     <button
                                         onClick={closeModal}
-                                        className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                        className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
                                     >
                                         Annuleren
                                     </button>
-                                    <button
-                                        onClick={confirmModal}
-                                        className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold hover:brightness-110 transition shadow-md"
-                                    >
-                                        Toevoegen
-                                    </button>
                                 </div>
 
+                                {/* Bewerk product klein en onderaan */}
                                 <button
                                     onClick={enterEditMode}
-                                    className="w-full mt-3 px-4 py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                    className="w-full mt-6 px-3 py-2 rounded-lg border border-gray-200 text-slate-500 text-sm hover:bg-gray-50 transition"
                                 >
-                                    Bewerk product
+                                    ⚙️ Bewerk product
                                 </button>
                             </>
                         ) : (
@@ -907,20 +927,23 @@ export default function KassaPage() {
             )}
 
             {/* Sticky bottom bar */}
-            <div className="fixed bottom-0 inset-x-0 border-t border-gray-200 bg-white shadow-lg">
-                <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between gap-3">
-                    <div className="text-lg relative">
-                        <span className="font-semibold text-slate-900">Totaal</span>{" "}
-                        <span className="relative inline-block text-slate-900 font-bold">
+            <div className="fixed bottom-0 inset-x-0 border-t-2 border-gray-200 bg-white/95 backdrop-blur-md shadow-2xl">
+                <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between gap-4">
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-lg font-semibold text-slate-700">Totaal:</span>
+                        <span className="text-3xl font-bold text-slate-900">
                             € {total.toFixed(2)}
+                        </span>
+                        <span className="text-sm text-slate-500 ml-2">
+                            ({cart.length} {cart.length === 1 ? "item" : "items"})
                         </span>
                     </div>
                     <button
                         onClick={() => cart.length && setOpen(true)}
                         disabled={cart.length === 0}
-                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold disabled:opacity-50 hover:brightness-110 transition shadow-md"
+                        className="px-8 py-4 text-xl rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-bold disabled:opacity-50 hover:brightness-110 transition shadow-xl active:scale-95"
                     >
-                        Bekijk bon
+                        🛒 Bekijk bon
                     </button>
                 </div>
             </div>
@@ -1026,9 +1049,9 @@ export default function KassaPage() {
                             <button
                                 onClick={checkout}
                                 disabled={saving || cart.length === 0}
-                                className="w-full py-2 rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-semibold disabled:opacity-50 hover:brightness-110 transition shadow-md"
+                                className="w-full py-5 text-xl rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-bold disabled:opacity-50 hover:brightness-110 transition shadow-xl active:scale-95"
                             >
-                                {saving ? "Opslaan…" : "Afrekenen"}
+                                {saving ? "⏳ Opslaan…" : "✓ AFREKENEN"}
                             </button>
                         </div>
                     </div>
