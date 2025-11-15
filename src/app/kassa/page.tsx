@@ -696,18 +696,18 @@ export default function KassaPage() {
                                         <div
                                             key={p.id}
                                             onClick={() => openModal(p)}
-                                            className="rounded-xl border-2 border-gray-200 bg-white/90 backdrop-blur-sm p-5 shadow-sm hover:shadow-lg hover:border-blue-400 transition cursor-pointer active:scale-95"
+                                            className="rounded-xl border-2 border-gray-200 bg-white/90 backdrop-blur-sm p-3 shadow-sm hover:shadow-lg hover:border-blue-400 transition cursor-pointer active:scale-95"
                                         >
-                                            <div className="font-bold text-lg text-slate-900 mb-2 leading-tight break-words min-h-[3rem] flex items-center">
+                                            <div className="font-bold text-sm text-slate-900 mb-2 leading-tight break-words min-h-[2.5rem] flex items-center">
                                                 {p.name}
                                             </div>
-                                            <div className="text-base font-bold text-blue-600 mb-1">
+                                            <div className="text-sm font-bold text-blue-600 mb-1">
                                                 {hasPrice ? `€ ${p.price!.toFixed(2)}` : "€ -.--"}
                                             </div>
                                             <div className="text-xs text-slate-500">
                                                 per {p.unit}
                                             </div>
-                                            <div className={`text-sm mt-2 font-semibold ${isLowStock ? "text-red-600" : "text-green-600"}`}>
+                                            <div className={`text-xs mt-2 font-semibold ${isLowStock ? "text-red-600" : "text-green-600"}`}>
                                                 {hasStock ? `${stock} ${p.unit === "KILO" ? "kg" : "st"}` : "geen voorraad"}
                                             </div>
                                         </div>
