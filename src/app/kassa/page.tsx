@@ -662,7 +662,7 @@ export default function KassaPage() {
                         {archivedProducts.length === 0 ? (
                             <p className="text-slate-600">Geen verborgen producten.</p>
                         ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                            <div className="grid grid-cols-5 gap-4">
                                 {archivedProducts.map((p) => (
                                     <div
                                         key={p.id}
@@ -685,7 +685,7 @@ export default function KassaPage() {
                         {filtered.length === 0 ? (
                             <p className="text-slate-600">Geen producten gevonden.</p>
                         ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-5 gap-3">
                                 {filtered.map((p) => {
                                     const hasPrice = p.price !== null && p.price !== undefined;
                                     const hasStock = p.stock_quantity !== null && p.stock_quantity !== undefined;
