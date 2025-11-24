@@ -1052,6 +1052,7 @@ export default function KassaPage() {
                                 className="w-full py-5 text-xl rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-bold disabled:opacity-50 hover:brightness-110 transition shadow-xl active:scale-95"
                             >
                                 {saving ? "⏳ Opslaan…" : "✓ AFREKENEN"}
+                                
                             </button>
                         </div>
                     </div>
