@@ -90,6 +90,12 @@ export default function KassaPage() {
     const [newProductPrice, setNewProductPrice] = useState("");
     const [newProductStock, setNewProductStock] = useState("");
 
+    // Betalingsmodal state
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<"PIN" | "CONTANT" | null>(null);
+    const [cashReceived, setCashReceived] = useState("");
+    const [changeAmount, setChangeAmount] = useState(0);
+
     // Ref voor auto-focus op input
     const modalInputRef = useRef<HTMLInputElement>(null);
 
@@ -505,9 +511,54 @@ export default function KassaPage() {
         });
     }
 
-    // ---------- Afrekenen - AANGEPAST MET SALE_TYPE ----------
+    // ---------- Betalingsfuncties ----------
+    // Rond bedrag af naar dichtstbijzijnde 5 cent
+    function roundToNickle(amount: number): number {
+        return Math.round(amount / 0.05) * 0.05;
+    }
+
+    // Open betalingsmodal
+    function openPaymentModal() {
+        if (cart.length === 0) return;
+        setPaymentModalOpen(true);
+        setPaymentMethod(null);
+        setCashReceived("");
+        setChangeAmount(0);
+    }
+
+    // Sluit betalingsmodal
+    function closePaymentModal() {
+        setPaymentModalOpen(false);
+        setPaymentMethod(null);
+        setCashReceived("");
+        setChangeAmount(0);
+    }
+
+    // Bereken wisselgeld wanneer contant bedrag verandert
+    function handleCashReceivedChange(value: string) {
+        setCashReceived(value);
+        const received = parseFloat(value);
+        if (!isNaN(received) && received > 0) {
+            const change = received - total;
+            setChangeAmount(roundToNickle(change));
+        } else {
+            setChangeAmount(0);
+        }
+    }
+
+    // ---------- Afrekenen - AANGEPAST MET SALE_TYPE EN BETALING ----------
     async function checkout() {
         if (cart.length === 0) return;
+
+        // Validatie bij contante betaling
+        if (paymentMethod === "CONTANT") {
+            const received = parseFloat(cashReceived);
+            if (isNaN(received) || received < total) {
+                setError("Ontvangen bedrag moet minimaal het totaalbedrag zijn.");
+                return;
+            }
+        }
+
         setSaving(true);
         setError(null);
 
@@ -527,7 +578,7 @@ export default function KassaPage() {
                     _items: payload,
                     _note: note || null,
                     _paid_at: new Date().toISOString(),
-                    _sale_type: saleType, // NIEUW: voeg sale_type toe
+                    _sale_type: saleType,
                 });
 
             if (rpcError) {
@@ -537,6 +588,7 @@ export default function KassaPage() {
             setCart([]);
             setNote("");
             setOpen(false);
+            closePaymentModal();
 
             // Type-specifieke melding
             const typeLabels: Record<SaleType, string> = {
@@ -1047,14 +1099,117 @@ export default function KassaPage() {
                                 onChange={(e) => setNote(e.target.value)}
                             />
                             <button
-                                onClick={checkout}
+                                onClick={openPaymentModal}
                                 disabled={saving || cart.length === 0}
                                 className="w-full py-5 text-xl rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-bold disabled:opacity-50 hover:brightness-110 transition shadow-xl active:scale-95"
                             >
                                 {saving ? "⏳ Opslaan…" : "✓ AFREKENEN"}
-                                
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Betalingsmodal */}
+            {paymentModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closePaymentModal} />
+                    <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 max-w-md w-full mx-4">
+                        <h2 className="text-2xl font-bold mb-6 text-slate-900">Betaalmethode</h2>
+
+                        {!paymentMethod ? (
+                            <div className="space-y-4">
+                                <button
+                                    onClick={() => setPaymentMethod("PIN")}
+                                    className="w-full py-6 text-xl rounded-xl bg-blue-500 text-white font-bold hover:brightness-110 transition shadow-lg active:scale-95"
+                                >
+                                    💳 Pin betalen
+                                </button>
+                                <button
+                                    onClick={() => setPaymentMethod("CONTANT")}
+                                    className="w-full py-6 text-xl rounded-xl bg-green-500 text-white font-bold hover:brightness-110 transition shadow-lg active:scale-95"
+                                >
+                                    💵 Contant betalen
+                                </button>
+                                <button
+                                    onClick={closePaymentModal}
+                                    className="w-full py-3 rounded-lg border-2 border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                >
+                                    Annuleren
+                                </button>
+                            </div>
+                        ) : paymentMethod === "PIN" ? (
+                            <div className="space-y-4">
+                                <div className="bg-blue-50 rounded-lg p-4 mb-4">
+                                    <div className="text-sm text-slate-600 mb-1">Totaalbedrag:</div>
+                                    <div className="text-3xl font-bold text-slate-900">€ {total.toFixed(2)}</div>
+                                </div>
+                                <p className="text-slate-700 mb-6">De betaling wordt direct verwerkt.</p>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setPaymentMethod(null)}
+                                        className="flex-1 px-4 py-3 rounded-lg border-2 border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                    >
+                                        Terug
+                                    </button>
+                                    <button
+                                        onClick={checkout}
+                                        disabled={saving}
+                                        className="flex-1 px-6 py-3 rounded-xl bg-blue-500 text-white font-bold hover:brightness-110 transition shadow-lg disabled:opacity-50"
+                                    >
+                                        {saving ? "⏳ Bezig..." : "✓ Bevestigen"}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="bg-green-50 rounded-lg p-4 mb-4">
+                                    <div className="text-sm text-slate-600 mb-1">Totaalbedrag:</div>
+                                    <div className="text-3xl font-bold text-slate-900">€ {total.toFixed(2)}</div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-2 text-slate-700">
+                                        Ontvangen bedrag (€)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min={total}
+                                        value={cashReceived}
+                                        onChange={(e) => handleCashReceivedChange(e.target.value)}
+                                        placeholder={`Min. € ${total.toFixed(2)}`}
+                                        className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-2xl font-bold text-slate-900 focus:border-green-500 focus:ring-4 focus:ring-green-200 transition"
+                                        autoFocus
+                                    />
+                                </div>
+
+                                {cashReceived && parseFloat(cashReceived) >= total && (
+                                    <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
+                                        <div className="text-sm text-slate-600 mb-1">Wisselgeld (afgerond):</div>
+                                        <div className="text-3xl font-bold text-green-600">
+                                            € {changeAmount.toFixed(2)}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-3 mt-6">
+                                    <button
+                                        onClick={() => setPaymentMethod(null)}
+                                        className="flex-1 px-4 py-3 rounded-lg border-2 border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                    >
+                                        Terug
+                                    </button>
+                                    <button
+                                        onClick={checkout}
+                                        disabled={saving || !cashReceived || parseFloat(cashReceived) < total}
+                                        className="flex-1 px-6 py-3 rounded-xl bg-green-500 text-white font-bold hover:brightness-110 transition shadow-lg disabled:opacity-50"
+                                    >
+                                        {saving ? "⏳ Bezig..." : "✓ Bevestigen"}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
