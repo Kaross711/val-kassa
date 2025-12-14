@@ -649,10 +649,10 @@ export default function KassaPage() {
                     <h1 className="text-2xl font-bold text-slate-900 mb-4">Kassa</h1>
 
                     {/* NIEUW: Type selectie */}
-                    <div className="flex gap-2 mb-4">
+                    <div className="flex flex-wrap gap-2 mb-4">
                         <button
                             onClick={() => setSaleType("WINKEL")}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${
+                            className={`px-3 sm:px-4 py-2 rounded-lg font-semibold transition text-sm sm:text-base ${
                                 saleType === "WINKEL"
                                     ? "bg-blue-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -662,7 +662,7 @@ export default function KassaPage() {
                         </button>
                         <button
                             onClick={() => setSaleType("BESTELLING")}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${
+                            className={`px-3 sm:px-4 py-2 rounded-lg font-semibold transition text-sm sm:text-base ${
                                 saleType === "BESTELLING"
                                     ? "bg-orange-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -672,7 +672,7 @@ export default function KassaPage() {
                         </button>
                         <button
                             onClick={() => setSaleType("BEDRIJF")}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${
+                            className={`px-3 sm:px-4 py-2 rounded-lg font-semibold transition text-sm sm:text-base ${
                                 saleType === "BEDRIJF"
                                     ? "bg-green-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -682,7 +682,7 @@ export default function KassaPage() {
                         </button>
                     </div>
 
-                    <div className="flex gap-3">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                         <input
                             type="text"
                             placeholder="Zoek product…"
@@ -690,18 +690,20 @@ export default function KassaPage() {
                             value={q}
                             onChange={(e) => setQ(e.target.value)}
                         />
-                        <button
-                            onClick={openAddProductModal}
-                            className="px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 transition shadow-md whitespace-nowrap"
-                        >
-                            + Product
-                        </button>
-                        <button
-                            onClick={() => setShowArchived(!showArchived)}
-                            className="px-4 py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition whitespace-nowrap"
-                        >
-                            {showArchived ? "Verberg archief" : "Toon archief"}
-                        </button>
+                        <div className="flex gap-2 sm:gap-3">
+                            <button
+                                onClick={openAddProductModal}
+                                className="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 transition shadow-md text-sm sm:text-base whitespace-nowrap"
+                            >
+                                + Product
+                            </button>
+                            <button
+                                onClick={() => setShowArchived(!showArchived)}
+                                className="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition text-sm sm:text-base whitespace-nowrap"
+                            >
+                                {showArchived ? "Archief" : "Archief"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -714,7 +716,7 @@ export default function KassaPage() {
                         {archivedProducts.length === 0 ? (
                             <p className="text-slate-600">Geen verborgen producten.</p>
                         ) : (
-                            <div className="grid grid-cols-5 gap-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                 {archivedProducts.map((p) => (
                                     <div
                                         key={p.id}
@@ -737,7 +739,7 @@ export default function KassaPage() {
                         {filtered.length === 0 ? (
                             <p className="text-slate-600">Geen producten gevonden.</p>
                         ) : (
-                            <div className="grid grid-cols-5 gap-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                                 {filtered.map((p) => {
                                     const hasPrice = p.price !== null && p.price !== undefined;
                                     const hasStock = p.stock_quantity !== null && p.stock_quantity !== undefined;
@@ -980,20 +982,20 @@ export default function KassaPage() {
 
             {/* Sticky bottom bar */}
             <div className="fixed bottom-0 inset-x-0 border-t-2 border-gray-200 bg-white/95 backdrop-blur-md shadow-2xl">
-                <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between gap-4">
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-lg font-semibold text-slate-700">Totaal:</span>
-                        <span className="text-3xl font-bold text-slate-900">
+                <div className="mx-auto max-w-7xl px-3 sm:px-4 py-3 sm:py-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+                    <div className="flex items-baseline gap-2 justify-center sm:justify-start">
+                        <span className="text-sm sm:text-lg font-semibold text-slate-700">Totaal:</span>
+                        <span className="text-2xl sm:text-3xl font-bold text-slate-900">
                             € {total.toFixed(2)}
                         </span>
-                        <span className="text-sm text-slate-500 ml-2">
+                        <span className="text-xs sm:text-sm text-slate-500 ml-1 sm:ml-2">
                             ({cart.length} {cart.length === 1 ? "item" : "items"})
                         </span>
                     </div>
                     <button
                         onClick={() => cart.length && setOpen(true)}
                         disabled={cart.length === 0}
-                        className="px-8 py-4 text-xl rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-bold disabled:opacity-50 hover:brightness-110 transition shadow-xl active:scale-95"
+                        className="px-6 sm:px-8 py-3 sm:py-4 text-lg sm:text-xl rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-bold disabled:opacity-50 hover:brightness-110 transition shadow-xl active:scale-95"
                     >
                         🛒 Bekijk bon
                     </button>

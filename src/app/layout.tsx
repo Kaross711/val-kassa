@@ -26,6 +26,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <NavLink href="/inkoop">Inkoop</NavLink>
                     <NavLink href="/bestellen">Bestellen</NavLink>
                     <NavLink href="/verkoop">Verkoop</NavLink>
+                    <NavLink href="/prijscalculator">Prijscalculator</NavLink>
+                    <NavLink href="/winst">Winst</NavLink>
                 </div>
             </nav>
         </header>
