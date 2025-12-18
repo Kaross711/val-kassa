@@ -645,14 +645,14 @@ export default function KassaPage() {
 
             {/* Header */}
             <div className="bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-sm sticky top-0 z-40">
-                <div className="mx-auto max-w-7xl px-4 py-4">
-                    <h1 className="text-2xl font-bold text-slate-900 mb-4">Kassa</h1>
+                <div className="mx-auto max-w-7xl px-3 py-3">
+                    <h1 className="text-xl md:text-2xl font-bold text-slate-900 mb-3">Kassa</h1>
 
                     {/* NIEUW: Type selectie */}
-                    <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="flex flex-wrap gap-1.5 mb-3">
                         <button
                             onClick={() => setSaleType("WINKEL")}
-                            className={`px-3 sm:px-4 py-2 rounded-lg font-semibold transition text-sm sm:text-base ${
+                            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold transition text-xs sm:text-sm ${
                                 saleType === "WINKEL"
                                     ? "bg-blue-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -662,7 +662,7 @@ export default function KassaPage() {
                         </button>
                         <button
                             onClick={() => setSaleType("BESTELLING")}
-                            className={`px-3 sm:px-4 py-2 rounded-lg font-semibold transition text-sm sm:text-base ${
+                            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold transition text-xs sm:text-sm ${
                                 saleType === "BESTELLING"
                                     ? "bg-orange-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -672,7 +672,7 @@ export default function KassaPage() {
                         </button>
                         <button
                             onClick={() => setSaleType("BEDRIJF")}
-                            className={`px-3 sm:px-4 py-2 rounded-lg font-semibold transition text-sm sm:text-base ${
+                            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold transition text-xs sm:text-sm ${
                                 saleType === "BEDRIJF"
                                     ? "bg-green-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -682,24 +682,24 @@ export default function KassaPage() {
                         </button>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                    <div className="flex flex-col sm:flex-row gap-2">
                         <input
                             type="text"
                             placeholder="Zoek product…"
-                            className="flex-1 border border-gray-300 rounded-lg px-4 py-2 bg-white text-slate-900 placeholder:text-slate-400"
+                            className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 sm:py-2 bg-white text-slate-900 placeholder:text-slate-400 text-sm"
                             value={q}
                             onChange={(e) => setQ(e.target.value)}
                         />
-                        <div className="flex gap-2 sm:gap-3">
+                        <div className="flex gap-2">
                             <button
                                 onClick={openAddProductModal}
-                                className="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 transition shadow-md text-sm sm:text-base whitespace-nowrap"
+                                className="flex-1 sm:flex-none px-3 py-1.5 sm:py-2 rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 transition shadow-md text-xs sm:text-sm whitespace-nowrap"
                             >
                                 + Product
                             </button>
                             <button
                                 onClick={() => setShowArchived(!showArchived)}
-                                className="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition text-sm sm:text-base whitespace-nowrap"
+                                className="flex-1 sm:flex-none px-3 py-1.5 sm:py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition text-xs sm:text-sm whitespace-nowrap"
                             >
                                 {showArchived ? "Archief" : "Archief"}
                             </button>
@@ -709,23 +709,23 @@ export default function KassaPage() {
             </div>
 
             {/* Producten grid */}
-            <div className="mx-auto max-w-7xl px-4 py-6">
+            <div className="mx-auto max-w-7xl px-3 py-4">
                 {showArchived ? (
                     <div>
-                        <h2 className="text-xl font-bold mb-4 text-slate-900">Verborgen producten</h2>
+                        <h2 className="text-lg font-bold mb-3 text-slate-900">Verborgen producten</h2>
                         {archivedProducts.length === 0 ? (
-                            <p className="text-slate-600">Geen verborgen producten.</p>
+                            <p className="text-slate-600 text-sm">Geen verborgen producten.</p>
                         ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
                                 {archivedProducts.map((p) => (
                                     <div
                                         key={p.id}
-                                        className="rounded-xl border border-gray-200 bg-white/90 backdrop-blur-sm p-4 shadow-sm hover:shadow-md transition"
+                                        className="rounded-lg border border-gray-200 bg-white/90 backdrop-blur-sm p-2 shadow-sm hover:shadow-md transition"
                                     >
-                                        <div className="font-semibold text-slate-900 mb-2">{p.name}</div>
+                                        <div className="font-semibold text-xs text-slate-900 mb-1.5">{p.name}</div>
                                         <button
                                             onClick={() => restoreProduct(p.id)}
-                                            className="w-full mt-2 px-3 py-1 rounded-lg bg-green-500 text-white text-sm font-semibold hover:brightness-110 transition"
+                                            className="w-full mt-1 px-2 py-0.5 rounded-md bg-green-500 text-white text-[10px] font-semibold hover:brightness-110 transition"
                                         >
                                             Terugzetten
                                         </button>
@@ -737,9 +737,9 @@ export default function KassaPage() {
                 ) : (
                     <>
                         {filtered.length === 0 ? (
-                            <p className="text-slate-600">Geen producten gevonden.</p>
+                            <p className="text-slate-600 text-sm">Geen producten gevonden.</p>
                         ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
                                 {filtered.map((p) => {
                                     const hasPrice = p.price !== null && p.price !== undefined;
                                     const hasStock = p.stock_quantity !== null && p.stock_quantity !== undefined;
@@ -750,18 +750,18 @@ export default function KassaPage() {
                                         <div
                                             key={p.id}
                                             onClick={() => openModal(p)}
-                                            className="rounded-xl border-2 border-gray-200 bg-white/90 backdrop-blur-sm p-3 shadow-sm hover:shadow-lg hover:border-blue-400 transition cursor-pointer active:scale-95"
+                                            className="rounded-lg border-2 border-gray-200 bg-white/90 backdrop-blur-sm p-2 shadow-sm hover:shadow-lg hover:border-blue-400 transition cursor-pointer active:scale-95"
                                         >
-                                            <div className="font-bold text-sm text-slate-900 mb-2 leading-tight break-words min-h-[2.5rem] flex items-center">
+                                            <div className="font-bold text-[11px] text-slate-900 mb-1 leading-tight break-words min-h-[2rem] flex items-center">
                                                 {p.name}
                                             </div>
-                                            <div className="text-sm font-bold text-blue-600 mb-1">
+                                            <div className="text-xs font-bold text-blue-600 mb-0.5">
                                                 {hasPrice ? `€ ${p.price!.toFixed(2)}` : "€ -.--"}
                                             </div>
-                                            <div className="text-xs text-slate-500">
+                                            <div className="text-[10px] text-slate-500">
                                                 per {p.unit}
                                             </div>
-                                            <div className={`text-xs mt-2 font-semibold ${isLowStock ? "text-red-600" : "text-green-600"}`}>
+                                            <div className={`text-[10px] mt-1 font-semibold ${isLowStock ? "text-red-600" : "text-green-600"}`}>
                                                 {hasStock ? `${stock} ${p.unit === "KILO" ? "kg" : "st"}` : "geen voorraad"}
                                             </div>
                                         </div>

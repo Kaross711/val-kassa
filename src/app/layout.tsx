@@ -17,11 +17,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <BackgroundFX />
         <Floatingemojis />
         <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/80 backdrop-blur-md shadow-sm">
-            <nav className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3">
-                <Link href="/" className="flex items-center gap-2">
-                    <FuturisticLogo className="text-lg" />
+            <nav className="mx-auto flex max-w-6xl items-center gap-1 px-2 py-2 overflow-x-auto">
+                <Link href="/" className="flex items-center gap-1 shrink-0 mr-1">
+                    <FuturisticLogo className="text-sm md:text-lg" />
                 </Link>
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex items-center gap-0.5 md:gap-2">
                     <NavLink href="/kassa">Kassa</NavLink>
                     <NavLink href="/inkoop">Inkoop</NavLink>
                     <NavLink href="/bestellen">Bestellen</NavLink>
@@ -44,8 +44,8 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
     return (
         <Link
             href={href}
-            className="relative px-3 py-1.5 text-sm text-slate-700 hover:text-slate-900 transition font-medium
-                 after:absolute after:inset-x-2 after:-bottom-[2px] after:h-[2px] after:scale-x-0 after:bg-gradient-to-r
+            className="relative px-1.5 md:px-3 py-1 md:py-1.5 text-[10px] md:text-sm text-slate-700 hover:text-slate-900 transition font-medium whitespace-nowrap
+                 after:absolute after:inset-x-0.5 md:after:inset-x-2 after:-bottom-[2px] after:h-[2px] after:scale-x-0 after:bg-gradient-to-r
                  after:from-green-400 after:via-orange-400 after:to-red-500 after:rounded-full
                  hover:after:scale-x-100 after:transition-transform after:origin-left"
         >
