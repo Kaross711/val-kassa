@@ -9,7 +9,6 @@ type Product = {
     id: string;
     name: string;
     unit: "STUK" | "KILO";
-    stock_quantity: number | null;
 };
 
 type PurchaseItem = {
@@ -48,15 +47,6 @@ type OrderItemRow = {
     units_per_box: number;
     actual_quantity: number;
     products: { name: string } | null;
-};
-
-type SimpleOrderItem = {
-    product_id: string;
-    actual_quantity: number;
-};
-
-type ProductStock = {
-    stock_quantity: number | null;
 };
 
 type ScannedItem = {
@@ -111,7 +101,7 @@ export default function InkoopPage() {
     async function loadProducts() {
         const { data, error } = await supabase
             .from("products")
-            .select("id,name,unit,stock_quantity")
+            .select("id,name,unit")
             .eq("is_active", true)
             .order("name");
 
@@ -173,30 +163,6 @@ export default function InkoopPage() {
         if (!confirmed) return;
 
         try {
-            const { data: orderItems, error: itemsError } = await supabase
-                .from("purchase_order_items")
-                .select("product_id, actual_quantity")
-                .eq("purchase_order_id", orderId);
-            if (itemsError) throw itemsError;
-
-            const itemRows = (orderItems ?? []) as SimpleOrderItem[];
-
-            for (const item of itemRows) {
-                const { data: productData } = await supabase
-                    .from("products")
-                    .select("stock_quantity")
-                    .eq("id", item.product_id)
-                    .single<ProductStock>();
-
-                if (productData) {
-                    const newStock = (productData.stock_quantity ?? 0) - item.actual_quantity;
-                    await supabase
-                        .from("products")
-                        .update({ stock_quantity: newStock })
-                        .eq("id", item.product_id);
-                }
-            }
-
             const { error: deleteError } = await supabase
                 .from("purchase_orders")
                 .delete()
@@ -204,11 +170,10 @@ export default function InkoopPage() {
 
             if (deleteError) throw deleteError;
 
-            setNotification("Pakbon succesvol verwijderd en voorraad bijgewerkt");
+            setNotification("Pakbon succesvol verwijderd");
             setSelectedOrderId(null);
             setSelectedOrderItems([]);
             loadOrders();
-            loadProducts();
         } catch (err: unknown) {
             if (err instanceof Error) {
                 setError(err.message);
@@ -537,23 +502,6 @@ Let op:
 
             if (itemsError) throw itemsError;
 
-            // Update voorraad
-            for (const item of items) {
-                const { data: productData } = await supabase
-                    .from("products")
-                    .select("stock_quantity")
-                    .eq("id", item.product_id)
-                    .single<ProductStock>();
-
-                if (productData) {
-                    const newStock = (productData.stock_quantity ?? 0) + item.actual_quantity;
-                    await supabase
-                        .from("products")
-                        .update({ stock_quantity: newStock })
-                        .eq("id", item.product_id);
-                }
-            }
-
             setNotification("Pakbon succesvol opgeslagen!");
 
             // Reset form
@@ -668,7 +616,7 @@ Let op:
                                             className="w-full text-left px-3 py-2 hover:bg-green-50 text-sm border-b border-gray-100 last:border-b-0"
                                         >
                                             <div className="font-medium text-slate-900">{p.name}</div>
-                                            <div className="text-xs text-slate-500">{p.unit} • Voorraad: {p.stock_quantity ?? 0}</div>
+                                            <div className="text-xs text-slate-500">{p.unit}</div>
                                         </button>
                                     ))}
                                 </div>
@@ -734,7 +682,7 @@ Let op:
                                                 {unmatched.suggestions.map((suggestion) => (
                                                     <button key={suggestion.id} onClick={() => selectMatch(idx, suggestion)} className="text-left px-3 py-2 rounded border border-gray-200 hover:border-green-400 hover:bg-green-50 transition">
                                                         <div className="font-medium text-slate-900">{suggestion.name}</div>
-                                                        <div className="text-xs text-slate-500">{suggestion.unit === "KILO" ? "Per kilo" : "Per stuk"} • Voorraad: {suggestion.stock_quantity ?? 0}</div>
+                                                        <div className="text-xs text-slate-500">{suggestion.unit === "KILO" ? "Per kilo" : "Per stuk"}</div>
                                                     </button>
                                                 ))}
                                             </div>

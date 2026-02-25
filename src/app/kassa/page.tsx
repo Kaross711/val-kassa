@@ -13,7 +13,6 @@ type Product = {
     name: string;
     unit: Unit;
     price: number | null;
-    stock_quantity: number | null;
 };
 
 type ArchivedProduct = {
@@ -81,14 +80,12 @@ export default function KassaPage() {
     // Modal state voor product beheer
     const [editMode, setEditMode] = useState(false);
     const [editPrice, setEditPrice] = useState("");
-    const [editStock, setEditStock] = useState("");
 
     // Nieuw product modal
     const [addProductOpen, setAddProductOpen] = useState(false);
     const [newProductName, setNewProductName] = useState("");
     const [newProductUnit, setNewProductUnit] = useState<Unit>("STUK");
     const [newProductPrice, setNewProductPrice] = useState("");
-    const [newProductStock, setNewProductStock] = useState("");
 
     // Betalingsmodal state
     const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -113,28 +110,7 @@ export default function KassaPage() {
         }
 
         const productsData = (data ?? []) as Product[];
-
-        const ids = productsData.map((p) => p.id);
-        if (ids.length > 0) {
-            const { data: stockData } = await supabase
-                .from("products")
-                .select("id,stock_quantity")
-                .in("id", ids);
-
-            const stockMap = new Map<string, number | null>();
-            (stockData ?? []).forEach((s: { id: string; stock_quantity: number | null }) => {
-                stockMap.set(s.id, s.stock_quantity);
-            });
-
-            const productsWithStock = productsData.map((p) => ({
-                ...p,
-                stock_quantity: stockMap.get(p.id) ?? null,
-            }));
-
-            setProducts(productsWithStock);
-        } else {
-            setProducts([]);
-        }
+        setProducts(productsData);
 
         // Verborgen producten ophalen
         const { data: hidden, error: hiddenErr } = await supabase
@@ -146,12 +122,7 @@ export default function KassaPage() {
         if (hiddenErr) {
             console.error("Supabase fout (verborgen laden):", hiddenErr);
         } else {
-            const hiddenWithStock = (hidden ?? []).map((p) => ({
-                ...(p as { id: string; name: string; unit: Unit }),
-                price: null,
-                stock_quantity: null,
-            }));
-            setArchivedProducts(hiddenWithStock);
+            setArchivedProducts((hidden ?? []) as ArchivedProduct[]);
         }
     }
 
@@ -227,7 +198,6 @@ export default function KassaPage() {
         setModalValue("1");
         setEditMode(false);
         setEditPrice("");
-        setEditStock("");
     }
 
     function confirmModal() {
@@ -288,7 +258,6 @@ export default function KassaPage() {
         if (!modalProduct) return;
         setEditMode(true);
         setEditPrice(modalProduct.price?.toString() ?? "");
-        setEditStock(modalProduct.stock_quantity?.toString() ?? "");
     }
 
     async function saveProductChanges() {
@@ -297,10 +266,9 @@ export default function KassaPage() {
         setError(null);
 
         const priceVal = parseFloat(editPrice);
-        const stockVal = parseFloat(editStock);
 
-        if (isNaN(priceVal) || isNaN(stockVal)) {
-            setError("Prijs en voorraad moeten getallen zijn.");
+        if (isNaN(priceVal)) {
+            setError("Prijs moet een getal zijn.");
             setSaving(false);
             return;
         }
@@ -343,18 +311,6 @@ export default function KassaPage() {
             }
         }
 
-        // Update voorraad in products tabel
-        const { error: stockErr } = await supabase
-            .from("products")
-            .update({ stock_quantity: stockVal })
-            .eq("id", modalProduct.id);
-
-        if (stockErr) {
-            setError("Fout voorraad opslaan: " + explainSupabaseError(stockErr));
-            setSaving(false);
-            return;
-        }
-
         await loadProducts();
         setSaving(false);
         setEditMode(false);
@@ -390,7 +346,6 @@ export default function KassaPage() {
         setNewProductName("");
         setNewProductUnit("STUK");
         setNewProductPrice("");
-        setNewProductStock("");
     }
 
     function closeAddProductModal() {
@@ -398,7 +353,6 @@ export default function KassaPage() {
         setNewProductName("");
         setNewProductUnit("STUK");
         setNewProductPrice("");
-        setNewProductStock("");
     }
 
     async function createNewProduct() {
@@ -413,10 +367,9 @@ export default function KassaPage() {
         }
 
         const price = parseFloat(newProductPrice);
-        const stock = parseFloat(newProductStock);
 
-        if (isNaN(price) || isNaN(stock)) {
-            setError("Prijs en voorraad moeten getallen zijn.");
+        if (isNaN(price)) {
+            setError("Prijs moet een getal zijn.");
             setSaving(false);
             return;
         }
@@ -426,7 +379,6 @@ export default function KassaPage() {
             .insert({
                 name,
                 unit: newProductUnit,
-                stock_quantity: stock,
                 is_active: true,
             })
             .select("id")
@@ -742,9 +694,6 @@ export default function KassaPage() {
                             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
                                 {filtered.map((p) => {
                                     const hasPrice = p.price !== null && p.price !== undefined;
-                                    const hasStock = p.stock_quantity !== null && p.stock_quantity !== undefined;
-                                    const stock = p.stock_quantity ?? 0;
-                                    const isLowStock = hasStock && stock < 5;
 
                                     return (
                                         <div
@@ -760,9 +709,6 @@ export default function KassaPage() {
                                             </div>
                                             <div className="text-[10px] text-slate-500">
                                                 per {p.unit}
-                                            </div>
-                                            <div className={`text-[10px] mt-1 font-semibold ${isLowStock ? "text-red-600" : "text-green-600"}`}>
-                                                {hasStock ? `${stock} ${p.unit === "KILO" ? "kg" : "st"}` : "geen voorraad"}
                                             </div>
                                         </div>
                                     );
@@ -825,19 +771,6 @@ export default function KassaPage() {
                                 />
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium mb-1 text-slate-700">
-                                    Voorraad ({newProductUnit === "KILO" ? "kg" : "stuks"})
-                                </label>
-                                <input
-                                    type="number"
-                                    step={newProductUnit === "KILO" ? "0.01" : "1"}
-                                    value={newProductStock}
-                                    onChange={(e) => setNewProductStock(e.target.value)}
-                                    className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
-                                    placeholder={newProductUnit === "KILO" ? "bijv. 25.5" : "bijv. 100"}
-                                />
-                            </div>
                         </div>
 
                         <div className="flex gap-3 mt-6">
@@ -870,13 +803,6 @@ export default function KassaPage() {
                                 <div className="text-lg text-slate-600 mb-2">
                                     € {toPrice(modalProduct.price).toFixed(2)} / {modalProduct.unit}
                                 </div>
-                                <div className="text-sm text-slate-500 mb-6">
-                                    Voorraad:{" "}
-                                    {modalProduct.stock_quantity !== null
-                                        ? `${modalProduct.stock_quantity} ${modalProduct.unit === "KILO" ? "kg" : "stuks"}`
-                                        : "onbekend"}
-                                </div>
-
                                 <label className="block text-lg font-semibold mb-3 text-slate-900">
                                     Aantal {modalProduct.unit === "KILO" ? "(kg)" : "(stuks)"}
                                 </label>
@@ -936,19 +862,6 @@ export default function KassaPage() {
                                         />
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1 text-slate-700">
-                                            Voorraad ({modalProduct.unit === "KILO" ? "kg" : "stuks"})
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step={modalProduct.unit === "KILO" ? "0.01" : "1"}
-                                            value={editStock}
-                                            onChange={(e) => setEditStock(e.target.value)}
-                                            className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
-                                            placeholder={modalProduct.unit === "KILO" ? "bijv. 25.5" : "bijv. 100"}
-                                        />
-                                    </div>
                                 </div>
 
                                 <div className="flex gap-3 mt-6">

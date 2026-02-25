@@ -53,6 +53,22 @@ type DateRange = {
     end: Date;
 };
 
+type FixedCost = {
+    naam: string;
+    bedragPerWeek: number;
+};
+
+const DEFAULT_FIXED_COSTS: FixedCost[] = [
+    { naam: "Pand / Huur", bedragPerWeek: 391.20 },
+    { naam: "Auto / Diesel", bedragPerWeek: 69.20 },
+    { naam: "Auto / Aflossing", bedragPerWeek: 237.40 },
+    { naam: "Personeel / MO", bedragPerWeek: 115.40 },
+    { naam: "Personeel / Karos", bedragPerWeek: 230.90 },
+    { naam: "Boekhouding / MO", bedragPerWeek: 27.70 },
+];
+
+const LOCALSTORAGE_KEY = "val-kassa-vaste-kosten";
+
 // Helper functie om datum string (YYYY-MM-DD) te parsen als lokale tijd (niet UTC)
 function parseDateLocal(dateString: string): Date {
     const [year, month, day] = dateString.split('-').map(Number);
@@ -133,20 +149,95 @@ export default function VerkoopPage() {
         winstMarge: 0,
     });
 
+    // Vaste kosten
+    const [fixedCosts, setFixedCosts] = useState<FixedCost[]>(DEFAULT_FIXED_COSTS);
+    const [editingCostIndex, setEditingCostIndex] = useState<number | null>(null);
+    const [editingCostNaam, setEditingCostNaam] = useState("");
+    const [editingCostBedrag, setEditingCostBedrag] = useState("");
+    const [addingCost, setAddingCost] = useState(false);
+    const [newCostNaam, setNewCostNaam] = useState("");
+    const [newCostBedrag, setNewCostBedrag] = useState("");
+
+    // Laad vaste kosten uit localStorage bij mount
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem(LOCALSTORAGE_KEY);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    setFixedCosts(parsed);
+                }
+            }
+        } catch {
+            // Gebruik standaardwaarden bij fout
+        }
+    }, []);
+
+    // Sla vaste kosten op in localStorage bij wijziging
+    function updateFixedCosts(newCosts: FixedCost[]) {
+        setFixedCosts(newCosts);
+        localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(newCosts));
+    }
+
     // Inklapbare secties
     const [collapsedSections, setCollapsedSections] = useState({
         winkel: false,
         bestelling: false,
         bedrijf: false,
         inkoop: false,
+        vasteKosten: false,
     });
 
-    function toggleSection(section: 'winkel' | 'bestelling' | 'bedrijf' | 'inkoop') {
+    function toggleSection(section: 'winkel' | 'bestelling' | 'bedrijf' | 'inkoop' | 'vasteKosten') {
         setCollapsedSections(prev => ({
             ...prev,
             [section]: !prev[section]
         }));
     }
+
+    // Bereken het aantal dagen in de geselecteerde periode
+    function calculateDaysInPeriod(): number {
+        const now = new Date();
+
+        if (selectedPeriod === "vandaag") {
+            return 1;
+        } else if (selectedPeriod === "week") {
+            const dayOfWeek = now.getDay(); // 0=zo, 1=ma, ...
+            const daysSinceMonday = dayOfWeek === 0 ? 7 : dayOfWeek; // zo=7 dagen
+            return daysSinceMonday;
+        } else if (selectedPeriod === "maand") {
+            return now.getDate(); // dag van de maand (1-31)
+        } else if (selectedPeriod === "custom") {
+            const start = new Date(customDateRange.start);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(customDateRange.end);
+            end.setHours(0, 0, 0, 0);
+            const diffMs = end.getTime() - start.getTime();
+            return Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
+        } else if (selectedPeriod === "alles") {
+            // Gebruik eerste transactie of 1 jan 2020 als fallback
+            const allReceipts = [...receipts.winkel, ...receipts.bestelling, ...receipts.bedrijf];
+            const allDates = [
+                ...allReceipts.map(r => new Date(r.created_at)),
+                ...purchaseOrders.map(p => new Date(p.created_at)),
+            ];
+            if (allDates.length === 0) return 1;
+            const earliest = new Date(Math.min(...allDates.map(d => d.getTime())));
+            earliest.setHours(0, 0, 0, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const diffMs = today.getTime() - earliest.getTime();
+            return Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
+        }
+        return 1;
+    }
+
+    // Bereken totaal vaste kosten per week
+    const totaalVasteKostenPerWeek = fixedCosts.reduce((sum, c) => sum + c.bedragPerWeek, 0);
+    const dagKosten = totaalVasteKostenPerWeek / 7;
+    const dagenInPeriode = calculateDaysInPeriod();
+    const vasteKostenVoorPeriode = dagKosten * dagenInPeriode;
+    const nettoWinst = totals.winst - vasteKostenVoorPeriode;
 
     useEffect(() => {
         loadData();
@@ -154,7 +245,7 @@ export default function VerkoopPage() {
 
     useEffect(() => {
         calculateStats();
-    }, [receipts, purchaseOrders, dbCounts, totals]);
+    }, [receipts, purchaseOrders, dbCounts, totals, vasteKostenVoorPeriode]);
 
     async function loadData() {
         setLoading(true);
@@ -427,7 +518,7 @@ export default function VerkoopPage() {
             : 0;
 
         const winstMarge = totals.totaalVerkoop > 0
-            ? ((totals.totaalVerkoop - totals.totaalInkoop) / totals.totaalVerkoop) * 100
+            ? (nettoWinst / totals.totaalVerkoop) * 100
             : 0;
 
         setStats({
@@ -769,7 +860,7 @@ export default function VerkoopPage() {
         );
     }
 
-    const winstColor = totals.winst >= 0 ? "text-green-600" : "text-red-600";
+    const winstColor = nettoWinst >= 0 ? "text-green-600" : "text-red-600";
 
     return (
         <div className="min-h-screen">
@@ -925,7 +1016,7 @@ export default function VerkoopPage() {
                     </div>
 
                     {/* Totalen overzicht */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-8">
                         <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-6">
                             <div className="text-sm font-medium text-blue-600 mb-1">Winkelverkopen</div>
                             <div className="text-2xl font-bold text-slate-900">€ {totals.winkel.toFixed(2)}</div>
@@ -950,11 +1041,23 @@ export default function VerkoopPage() {
                             <div className="text-xs text-slate-500 mt-1">{dbCounts.inkoopCount || purchaseOrders.length} orders</div>
                         </div>
 
-                        <div className={`rounded-xl shadow-md p-6 ${totals.winst >= 0 ? 'bg-gradient-to-br from-green-500 to-emerald-600' : 'bg-gradient-to-br from-red-500 to-rose-600'}`}>
-                            <div className="text-sm font-medium text-white/90 mb-1">Winst</div>
-                            <div className="text-2xl font-bold text-white">€ {totals.winst.toFixed(2)}</div>
+                        <div className={`rounded-xl shadow-sm p-6 bg-white/90 backdrop-blur-sm border ${totals.winst >= 0 ? 'border-green-200' : 'border-red-200'}`}>
+                            <div className="text-sm font-medium text-slate-600 mb-1">Bruto winst</div>
+                            <div className={`text-2xl font-bold ${totals.winst >= 0 ? 'text-green-700' : 'text-red-700'}`}>€ {totals.winst.toFixed(2)}</div>
+                            <div className="text-xs text-slate-500 mt-1">Verkoop - Inkoop</div>
+                        </div>
+
+                        <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-purple-200 shadow-sm p-6">
+                            <div className="text-sm font-medium text-purple-600 mb-1">Vaste kosten</div>
+                            <div className="text-2xl font-bold text-purple-700">€ {vasteKostenVoorPeriode.toFixed(2)}</div>
+                            <div className="text-xs text-slate-500 mt-1">{dagenInPeriode} dag{dagenInPeriode !== 1 ? 'en' : ''}</div>
+                        </div>
+
+                        <div className={`rounded-xl shadow-md p-6 ${nettoWinst >= 0 ? 'bg-gradient-to-br from-green-500 to-emerald-600' : 'bg-gradient-to-br from-red-500 to-rose-600'}`}>
+                            <div className="text-sm font-medium text-white/90 mb-1">Netto winst</div>
+                            <div className="text-2xl font-bold text-white">€ {nettoWinst.toFixed(2)}</div>
                             <div className="text-xs text-white/80 mt-1">
-                                Verkoop - Inkoop
+                                Bruto - Vaste kosten
                             </div>
                         </div>
                     </div>
@@ -993,6 +1096,198 @@ export default function VerkoopPage() {
                     />
 
                     <PurchasesSection />
+
+                    {/* Vaste Kosten Beheer */}
+                    <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div
+                            className="bg-purple-50 px-6 py-4 border-b border-gray-200 cursor-pointer hover:brightness-95 transition"
+                            onClick={() => toggleSection('vasteKosten')}
+                        >
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <button className="text-2xl text-purple-700 font-bold">
+                                        {collapsedSections.vasteKosten ? "▶" : "▼"}
+                                    </button>
+                                    <h2 className="text-xl font-bold text-purple-700">Vaste Kosten Beheer</h2>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-2xl font-bold text-purple-700">
+                                        € {totaalVasteKostenPerWeek.toFixed(2)} / week
+                                    </div>
+                                    <div className="text-sm text-slate-600">
+                                        € {dagKosten.toFixed(2)} per dag
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {!collapsedSections.vasteKosten && (
+                            <div className="p-6">
+                                <p className="text-sm text-slate-500 mb-4 italic">
+                                    Deze kosten worden proportioneel berekend per geselecteerde periode
+                                </p>
+
+                                <div className="space-y-3 mb-4">
+                                    {fixedCosts.map((cost, index) => (
+                                        <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition">
+                                            {editingCostIndex === index ? (
+                                                <div className="flex flex-wrap gap-3 items-end">
+                                                    <div className="flex-1 min-w-[150px]">
+                                                        <label className="block text-xs text-slate-500 mb-1">Naam</label>
+                                                        <input
+                                                            type="text"
+                                                            value={editingCostNaam}
+                                                            onChange={(e) => setEditingCostNaam(e.target.value)}
+                                                            className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                                        />
+                                                    </div>
+                                                    <div className="w-[140px]">
+                                                        <label className="block text-xs text-slate-500 mb-1">Bedrag / week</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={editingCostBedrag}
+                                                            onChange={(e) => setEditingCostBedrag(e.target.value)}
+                                                            className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                                        />
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            const bedrag = parseFloat(editingCostBedrag);
+                                                            if (editingCostNaam.trim() && !isNaN(bedrag) && bedrag >= 0) {
+                                                                const updated = [...fixedCosts];
+                                                                updated[index] = { naam: editingCostNaam.trim(), bedragPerWeek: bedrag };
+                                                                updateFixedCosts(updated);
+                                                                setEditingCostIndex(null);
+                                                            }
+                                                        }}
+                                                        className="px-4 py-2 rounded-lg bg-purple-500 text-white font-semibold hover:brightness-110 transition"
+                                                    >
+                                                        Opslaan
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setEditingCostIndex(null)}
+                                                        className="px-4 py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                                    >
+                                                        Annuleren
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <div className="font-medium text-slate-900">{cost.naam}</div>
+                                                        <div className="text-sm text-slate-500">€ {(cost.bedragPerWeek / 7).toFixed(2)} per dag</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="text-xl font-bold text-purple-700">
+                                                            € {cost.bedragPerWeek.toFixed(2)}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingCostIndex(index);
+                                                                setEditingCostNaam(cost.naam);
+                                                                setEditingCostBedrag(cost.bedragPerWeek.toString());
+                                                            }}
+                                                            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                                                        >
+                                                            Bewerken
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (confirm(`Weet je zeker dat je "${cost.naam}" wilt verwijderen?`)) {
+                                                                    const updated = fixedCosts.filter((_, i) => i !== index);
+                                                                    updateFixedCosts(updated);
+                                                                }
+                                                            }}
+                                                            className="text-sm text-red-600 hover:text-red-700 font-medium"
+                                                        >
+                                                            Verwijderen
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Nieuwe kostenpost toevoegen */}
+                                {addingCost ? (
+                                    <div className="border border-purple-200 rounded-lg p-4 bg-purple-50">
+                                        <div className="flex flex-wrap gap-3 items-end">
+                                            <div className="flex-1 min-w-[150px]">
+                                                <label className="block text-xs text-slate-500 mb-1">Naam</label>
+                                                <input
+                                                    type="text"
+                                                    value={newCostNaam}
+                                                    onChange={(e) => setNewCostNaam(e.target.value)}
+                                                    placeholder="Bijv. Verzekering"
+                                                    className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                                />
+                                            </div>
+                                            <div className="w-[140px]">
+                                                <label className="block text-xs text-slate-500 mb-1">Bedrag / week</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={newCostBedrag}
+                                                    onChange={(e) => setNewCostBedrag(e.target.value)}
+                                                    placeholder="0.00"
+                                                    className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                                />
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    const bedrag = parseFloat(newCostBedrag);
+                                                    if (newCostNaam.trim() && !isNaN(bedrag) && bedrag >= 0) {
+                                                        updateFixedCosts([...fixedCosts, { naam: newCostNaam.trim(), bedragPerWeek: bedrag }]);
+                                                        setNewCostNaam("");
+                                                        setNewCostBedrag("");
+                                                        setAddingCost(false);
+                                                    }
+                                                }}
+                                                className="px-4 py-2 rounded-lg bg-purple-500 text-white font-semibold hover:brightness-110 transition"
+                                            >
+                                                Toevoegen
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setAddingCost(false);
+                                                    setNewCostNaam("");
+                                                    setNewCostBedrag("");
+                                                }}
+                                                className="px-4 py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                            >
+                                                Annuleren
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => setAddingCost(true)}
+                                        className="w-full py-3 rounded-lg border-2 border-dashed border-purple-300 text-purple-600 font-semibold hover:bg-purple-50 transition"
+                                    >
+                                        + Nieuwe kostenpost toevoegen
+                                    </button>
+                                )}
+
+                                {/* Totaal overzicht */}
+                                <div className="mt-4 pt-4 border-t border-gray-200">
+                                    <div className="flex justify-between items-center">
+                                        <div className="font-bold text-slate-900">Totaal per week</div>
+                                        <div className="text-xl font-bold text-purple-700">€ {totaalVasteKostenPerWeek.toFixed(2)}</div>
+                                    </div>
+                                    <div className="flex justify-between items-center mt-1">
+                                        <div className="text-sm text-slate-500">Per dag</div>
+                                        <div className="text-sm font-medium text-slate-700">€ {dagKosten.toFixed(2)}</div>
+                                    </div>
+                                    <div className="flex justify-between items-center mt-1">
+                                        <div className="text-sm text-slate-500">Huidige periode ({dagenInPeriode} dag{dagenInPeriode !== 1 ? 'en' : ''})</div>
+                                        <div className="text-sm font-bold text-purple-700">€ {vasteKostenVoorPeriode.toFixed(2)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

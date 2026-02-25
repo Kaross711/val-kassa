@@ -24,10 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <div className="ml-auto flex items-center gap-0.5 md:gap-2">
                     <NavLink href="/kassa">Kassa</NavLink>
                     <NavLink href="/inkoop">Inkoop</NavLink>
-                    <NavLink href="/bestellen">Bestellen</NavLink>
                     <NavLink href="/verkoop">Verkoop</NavLink>
-                    <NavLink href="/prijscalculator">Prijscalculator</NavLink>
-                    <NavLink href="/winst">Winst</NavLink>
                 </div>
             </nav>
         </header>
