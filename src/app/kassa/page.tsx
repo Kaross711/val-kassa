@@ -939,13 +939,13 @@ export default function KassaPage() {
                         aria-modal="true"
                         className="absolute right-0 top-0 h-full w-full sm:w-[440px] bg-white/95 backdrop-blur-md shadow-xl border-l border-gray-200 flex flex-col"
                     >
-                        <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50/80">
+                        <div className="shrink-0 p-4 border-b-2 border-gray-200 flex items-center justify-between bg-white sticky top-0 z-10">
                             <h2 className="text-xl font-semibold text-slate-900">Winkelmand</h2>
                             <button
                                 onClick={() => setOpen(false)}
-                                className="text-sm text-slate-600 hover:text-slate-900 font-medium"
+                                className="px-4 py-2.5 rounded-lg bg-slate-800 text-white font-bold text-sm hover:bg-slate-700 active:scale-95 transition shadow-md"
                             >
-                                Sluiten ✕
+                                ✕ Sluiten
                             </button>
                         </div>
 
