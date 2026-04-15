@@ -87,6 +87,9 @@ export default function KassaPage() {
     const [newProductUnit, setNewProductUnit] = useState<Unit>("STUK");
     const [newProductPrice, setNewProductPrice] = useState("");
 
+    // Voucher state
+    const [voucherApplied, setVoucherApplied] = useState(false);
+
     // Betalingsmodal state
     const [paymentModalOpen, setPaymentModalOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<"PIN" | "CONTANT" | null>(null);
@@ -539,6 +542,7 @@ export default function KassaPage() {
 
             setCart([]);
             setNote("");
+            setVoucherApplied(false);
             setOpen(false);
             closePaymentModal();
 
@@ -571,9 +575,16 @@ export default function KassaPage() {
         return products.filter((p) => p.name.toLowerCase().includes(term));
     }, [products, q]);
 
-    const total = useMemo(() => {
+    const subtotal = useMemo(() => {
         return cart.reduce((sum, c) => sum + c.line_total, 0);
     }, [cart]);
+
+    const total = useMemo(() => {
+        if (voucherApplied) {
+            return Math.max(0, subtotal - 5);
+        }
+        return subtotal;
+    }, [subtotal, voucherApplied]);
 
     // ---------- Render ----------
     return (
@@ -1013,12 +1024,44 @@ export default function KassaPage() {
                                 value={note}
                                 onChange={(e) => setNote(e.target.value)}
                             />
+
+                            {/* Voucher checkbox */}
+                            <label className="flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-orange-300 bg-orange-50 cursor-pointer hover:bg-orange-100 transition">
+                                <input
+                                    type="checkbox"
+                                    checked={voucherApplied}
+                                    onChange={(e) => setVoucherApplied(e.target.checked)}
+                                    className="w-5 h-5 accent-orange-500 rounded"
+                                />
+                                <div>
+                                    <span className="font-semibold text-slate-900">Kortingsvoucher</span>
+                                    <span className="text-sm text-slate-600 ml-1">(-€5,00)</span>
+                                </div>
+                            </label>
+
+                            {voucherApplied && (
+                                <div className="text-sm text-slate-600 space-y-1">
+                                    <div className="flex justify-between">
+                                        <span>Subtotaal:</span>
+                                        <span>€ {subtotal.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-orange-600 font-semibold">
+                                        <span>Voucher korting:</span>
+                                        <span>- € {Math.min(5, subtotal).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between font-bold text-slate-900 border-t border-gray-200 pt-1">
+                                        <span>Totaal:</span>
+                                        <span>€ {total.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            )}
+
                             <button
                                 onClick={openPaymentModal}
                                 disabled={saving || cart.length === 0}
                                 className="w-full py-5 text-xl rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-bold disabled:opacity-50 hover:brightness-110 transition shadow-xl active:scale-95"
                             >
-                                {saving ? "⏳ Opslaan…" : "✓ AFREKENEN"}
+                                {saving ? "⏳ Opslaan…" : `✓ AFREKENEN — € ${total.toFixed(2)}`}
                             </button>
                         </div>
                     </div>
