@@ -31,6 +31,16 @@ type CartItem = {
     line_total: number;
 };
 
+// localStorage key zodat de winkelwagen bewaard blijft bij per ongeluk weg-navigeren
+const CART_STORAGE_KEY = "val-kassa-winkelwagen";
+
+type StoredCart = {
+    cart: CartItem[];
+    saleType: SaleType;
+    note: string;
+    voucherApplied: boolean;
+};
+
 function toPrice(price: number | null): number {
     return price ?? 0;
 }
@@ -99,6 +109,38 @@ export default function KassaPage() {
     // Ref voor auto-focus op input
     const modalInputRef = useRef<HTMLInputElement>(null);
 
+    // Houdt bij of de winkelwagen uit localStorage is geladen, zodat we
+    // de opslag niet overschrijven met de lege begin-state.
+    const [hydrated, setHydrated] = useState(false);
+
+    // ---------- Winkelwagen bewaren (localStorage) ----------
+    // Laad bewaarde winkelwagen bij het openen van de pagina
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem(CART_STORAGE_KEY);
+            if (stored) {
+                const parsed = JSON.parse(stored) as StoredCart;
+                if (Array.isArray(parsed.cart)) setCart(parsed.cart);
+                if (parsed.saleType) setSaleType(parsed.saleType);
+                if (typeof parsed.note === "string") setNote(parsed.note);
+                if (typeof parsed.voucherApplied === "boolean") setVoucherApplied(parsed.voucherApplied);
+            }
+        } catch {
+            // Negeer corrupte opslag
+        }
+        setHydrated(true);
+    }, []);
+
+    // Bewaar de winkelwagen bij elke wijziging (pas nadat we geladen hebben)
+    useEffect(() => {
+        if (!hydrated) return;
+        try {
+            const toStore: StoredCart = { cart, saleType, note, voucherApplied };
+            localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(toStore));
+        } catch {
+            // Negeer opslagfouten (bijv. volle storage / private mode)
+        }
+    }, [cart, saleType, note, voucherApplied, hydrated]);
 
     // ---------- Data loading ----------
     async function loadProducts() {

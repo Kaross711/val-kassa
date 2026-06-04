@@ -32,7 +32,36 @@ type PurchaseOrder = {
     created_at: string;
     supplier: string | null;
     total_amount: number;
+    note: string | null;
 };
+
+type Period = "vandaag" | "week" | "maand" | "custom" | "alles";
+
+// Datum (YYYY-MM-DD) parsen als lokale tijd (niet UTC)
+function parseDateLocal(dateString: string): Date {
+    const [year, month, day] = dateString.split("-").map(Number);
+    return new Date(year, month - 1, day);
+}
+
+// Date object naar YYYY-MM-DD voor <input type="date">
+function formatDateForInput(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
+// Date naar ISO string met lokale tijd (voorkomt timezone shift)
+function toLocalISOString(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+    const ms = String(date.getMilliseconds()).padStart(3, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}`;
+}
 
 type PurchaseOrderItem = {
     product_name: string;
@@ -66,14 +95,23 @@ export default function InkoopPage() {
     const [items, setItems] = useState<PurchaseItem[]>([]);
     const [unmatchedItems, setUnmatchedItems] = useState<UnmatchedItem[]>([]);
     const [supplier, setSupplier] = useState("");
+    const [purchaseNote, setPurchaseNote] = useState(""); // omschrijving: waarvoor is deze inkoop
     const [totalAmount, setTotalAmount] = useState<number>(0); // handmatig invoeren
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notification, setNotification] = useState<string | null>(null);
 
     const [orders, setOrders] = useState<PurchaseOrder[]>([]);
-    const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-    const [selectedOrderItems, setSelectedOrderItems] = useState<PurchaseOrderItem[]>([]);
+    const [loadingOrders, setLoadingOrders] = useState(false);
+    // Overzicht: per inkoop uitklapbare details (items), gecachet per order-id
+    const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+    const [orderItemsCache, setOrderItemsCache] = useState<Record<string, PurchaseOrderItem[]>>({});
+    const [loadingOrderItems, setLoadingOrderItems] = useState<Record<string, boolean>>({});
+
+    // Filter op periode voor het inkoop-overzicht
+    const [period, setPeriod] = useState<Period>("maand");
+    const [customStart, setCustomStart] = useState<Date>(new Date());
+    const [customEnd, setCustomEnd] = useState<Date>(new Date());
 
     const [processing, setProcessing] = useState(false);
     const [uploadedImage, setUploadedImage] = useState<string | null>(null);
@@ -87,8 +125,13 @@ export default function InkoopPage() {
     // ---------- Effects ----------
     useEffect(() => {
         loadProducts();
-        loadOrders();
     }, []);
+
+    // Herlaad het overzicht zodra de periode-filter verandert
+    useEffect(() => {
+        loadOrders();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [period, customStart, customEnd]);
 
     useEffect(() => {
         if (notification) {
@@ -96,6 +139,41 @@ export default function InkoopPage() {
             return () => clearTimeout(timer);
         }
     }, [notification]);
+
+    // ---------- Periode -> datumrange ----------
+    function getDateRange(): { startDate: string; endDate: string } {
+        const now = new Date();
+        const endOfToday = new Date(now);
+        endOfToday.setHours(23, 59, 59, 999);
+
+        if (period === "vandaag") {
+            const today = new Date(now);
+            today.setHours(0, 0, 0, 0);
+            return { startDate: toLocalISOString(today), endDate: toLocalISOString(endOfToday) };
+        }
+        if (period === "week") {
+            const today = new Date(now);
+            const dayOfWeek = today.getDay(); // 0 = zondag
+            const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+            const monday = new Date(today);
+            monday.setDate(today.getDate() - daysToMonday);
+            monday.setHours(0, 0, 0, 0);
+            return { startDate: toLocalISOString(monday), endDate: toLocalISOString(endOfToday) };
+        }
+        if (period === "maand") {
+            const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+            return { startDate: toLocalISOString(firstOfMonth), endDate: toLocalISOString(endOfToday) };
+        }
+        if (period === "custom") {
+            const start = new Date(customStart);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(customEnd);
+            end.setHours(23, 59, 59, 999);
+            return { startDate: toLocalISOString(start), endDate: toLocalISOString(end) };
+        }
+        // alles
+        return { startDate: "2020-01-01T00:00:00.000", endDate: "2099-12-31T23:59:59.999" };
+    }
 
     // ---------- Data loading ----------
     async function loadProducts() {
@@ -114,21 +192,30 @@ export default function InkoopPage() {
     }
 
     async function loadOrders() {
+        setLoadingOrders(true);
+        const { startDate, endDate } = getDateRange();
+
         const { data, error } = await supabase
             .from("purchase_orders")
-            .select("id,created_at,supplier,total_amount")
+            .select("id,created_at,supplier,total_amount,note")
+            .gte("created_at", startDate)
+            .lte("created_at", endDate)
             .order("created_at", { ascending: false })
-            .limit(10);
+            .limit(1000);
 
         if (error) {
             console.error("Fout bij laden pakbonnen:", error);
+            setError(error.message);
         } else {
             setOrders((data ?? []) as PurchaseOrder[]);
         }
+        setLoadingOrders(false);
     }
 
-    async function loadOrderDetails(orderId: string) {
-        setSelectedOrderId(orderId);
+    // Items van een inkoop lazy laden + cachen
+    async function loadOrderItems(orderId: string) {
+        if (orderItemsCache[orderId]) return;
+        setLoadingOrderItems((prev) => ({ ...prev, [orderId]: true }));
 
         const { data, error } = await supabase
             .from("purchase_order_items")
@@ -152,7 +239,17 @@ export default function InkoopPage() {
                 units_per_box: item.units_per_box,
                 actual_quantity: item.actual_quantity,
             }));
-            setSelectedOrderItems(formattedItems);
+            setOrderItemsCache((prev) => ({ ...prev, [orderId]: formattedItems }));
+        }
+        setLoadingOrderItems((prev) => ({ ...prev, [orderId]: false }));
+    }
+
+    function toggleOrder(orderId: string) {
+        if (expandedOrderId === orderId) {
+            setExpandedOrderId(null);
+        } else {
+            setExpandedOrderId(orderId);
+            loadOrderItems(orderId);
         }
     }
 
@@ -171,8 +268,7 @@ export default function InkoopPage() {
             if (deleteError) throw deleteError;
 
             setNotification("Pakbon succesvol verwijderd");
-            setSelectedOrderId(null);
-            setSelectedOrderItems([]);
+            setExpandedOrderId(null);
             loadOrders();
         } catch (err: unknown) {
             if (err instanceof Error) {
@@ -476,6 +572,7 @@ Let op:
                 .insert({
                     supplier: supplier || null,
                     total_amount: totalAmount,
+                    note: purchaseNote.trim() || null,
                 })
                 .select("id")
                 .single<{ id: string }>();
@@ -508,6 +605,7 @@ Let op:
             setItems([]);
             setUnmatchedItems([]);
             setSupplier("");
+            setPurchaseNote("");
             setTotalAmount(0);
             setUploadedImage(null);
 
@@ -530,6 +628,31 @@ Let op:
         const search = manualSearch.toLowerCase();
         return products.filter((p) => p.name.toLowerCase().includes(search));
     }, [products, manualSearch]);
+
+    // Totaal van alle inkopen in de geselecteerde periode
+    const totalPurchasesAmount = useMemo(
+        () => orders.reduce((sum, o) => sum + (o.total_amount || 0), 0),
+        [orders]
+    );
+
+    const periodLabels: Record<Period, string> = {
+        vandaag: "Vandaag",
+        week: "Deze week",
+        maand: "Deze maand",
+        custom: "Aangepast",
+        alles: "Alles",
+    };
+
+    function formatOrderDate(dateString: string) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString("nl-NL", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-50 via-orange-50 to-red-50 p-4 md:p-6">
@@ -724,6 +847,19 @@ Let op:
                                     className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-400 font-semibold text-lg"
                                 />
                             </div>
+
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    Omschrijving / waarvoor (optioneel)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={purchaseNote}
+                                    onChange={(e) => setPurchaseNote(e.target.value)}
+                                    placeholder="bijv. wekelijkse voorraad, speciale bestelling klant…"
+                                    className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-400"
+                                />
+                            </div>
                         </div>
 
                         <div className="rounded-lg border border-gray-200 overflow-hidden">
@@ -782,65 +918,155 @@ Let op:
                     </div>
                 )}
 
-                {/* Geschiedenis */}
+                {/* Inkoop overzicht (alle inkopen, filterbaar) */}
                 <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-                    <h2 className="text-xl font-semibold text-slate-900 mb-4">Recente pakbonnen</h2>
-                    {orders.length === 0 ? (
-                        <p className="text-slate-600 text-sm">Nog geen pakbonnen ingevoerd.</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                        <h2 className="text-xl font-semibold text-slate-900">Inkoop overzicht</h2>
+                        <div className="text-right">
+                            <div className="text-2xl font-bold text-red-700">€ {totalPurchasesAmount.toFixed(2)}</div>
+                            <div className="text-sm text-slate-600">
+                                {orders.length} inkoop{orders.length !== 1 ? "en" : ""} · {periodLabels[period]}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Periode filter */}
+                    <div className="flex flex-wrap gap-2 mb-4">
+                        {(["vandaag", "week", "maand", "alles", "custom"] as Period[]).map((p) => (
+                            <button
+                                key={p}
+                                onClick={() => setPeriod(p)}
+                                className={`px-4 py-2 rounded-lg font-semibold transition text-sm ${
+                                    period === p
+                                        ? "bg-green-500 text-white shadow-md"
+                                        : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
+                                }`}
+                            >
+                                {p === "custom" ? "Aangepaste periode" : periodLabels[p]}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Custom datumrange */}
+                    {period === "custom" && (
+                        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 mb-4">
+                            <div className="flex flex-wrap gap-4 items-end">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Van</label>
+                                    <input
+                                        type="date"
+                                        value={formatDateForInput(customStart)}
+                                        onChange={(e) => setCustomStart(parseDateLocal(e.target.value))}
+                                        className="border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Tot</label>
+                                    <input
+                                        type="date"
+                                        value={formatDateForInput(customEnd)}
+                                        onChange={(e) => setCustomEnd(parseDateLocal(e.target.value))}
+                                        className="border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {loadingOrders ? (
+                        <p className="text-slate-500 text-sm text-center py-8">Laden…</p>
+                    ) : orders.length === 0 ? (
+                        <p className="text-slate-600 text-sm text-center py-8">Geen inkopen in deze periode.</p>
                     ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                             {orders.map((order) => {
-                                const date = new Date(order.created_at);
-                                const dateStr = date.toLocaleDateString("nl-NL", { day: "2-digit", month: "short", year: "numeric" });
-                                const timeStr = date.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+                                const isExpanded = expandedOrderId === order.id;
+                                const itemsForOrder = orderItemsCache[order.id] || [];
+                                const isLoadingItems = loadingOrderItems[order.id];
+
                                 return (
-                                    <button key={order.id} onClick={() => loadOrderDetails(order.id)} className={`w-full flex items-center justify-between p-3 rounded-lg border transition ${selectedOrderId === order.id ? "border-green-400 bg-green-50 shadow-md" : "border-gray-200 hover:border-green-300 hover:shadow-md bg-white"}`}>
-                                        <div className="text-left">
-                                            <div className="font-medium text-slate-900">{dateStr} — {timeStr}</div>
-                                            {order.supplier && <div className="text-sm text-slate-600">{order.supplier}</div>}
-                                        </div>
-                                        <div className="text-lg font-bold text-slate-900">€ {order.total_amount.toFixed(2)}</div>
-                                    </button>
+                                    <div
+                                        key={order.id}
+                                        className={`border rounded-lg overflow-hidden transition ${isExpanded ? "border-green-400 shadow-md" : "border-gray-200 hover:shadow-md"}`}
+                                    >
+                                        <button
+                                            onClick={() => toggleOrder(order.id)}
+                                            className="w-full text-left p-4 hover:bg-gray-50 transition"
+                                        >
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <div className="font-medium text-slate-900">
+                                                        {formatOrderDate(order.created_at)}
+                                                    </div>
+                                                    {order.supplier && (
+                                                        <div className="text-sm text-slate-700">
+                                                            Leverancier: {order.supplier}
+                                                        </div>
+                                                    )}
+                                                    {order.note && (
+                                                        <div className="text-sm text-slate-600 italic mt-0.5">
+                                                            {order.note}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                    <div className="text-xl font-bold text-red-700">
+                                                        € {order.total_amount.toFixed(2)}
+                                                    </div>
+                                                    <div className="text-xs text-green-600 mt-1">
+                                                        {isExpanded ? "▼ Producten" : "▶ Producten"}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </button>
+
+                                        {isExpanded && (
+                                            <div className="border-t border-gray-200 bg-gray-50 p-4">
+                                                {isLoadingItems ? (
+                                                    <div className="text-center py-4 text-slate-500">Laden…</div>
+                                                ) : itemsForOrder.length === 0 ? (
+                                                    <div className="text-center py-4 text-slate-500">Geen producten gevonden.</div>
+                                                ) : (
+                                                    <div className="rounded-lg border border-gray-200 overflow-hidden bg-white">
+                                                        <table className="min-w-full text-sm">
+                                                            <thead className="bg-gray-50">
+                                                            <tr>
+                                                                <th className="px-3 py-2 text-left text-slate-900 font-semibold">Product</th>
+                                                                <th className="px-3 py-2 text-left text-slate-900 font-semibold">Aantal (pakbon)</th>
+                                                                <th className="px-3 py-2 text-left text-slate-900 font-semibold">Stuks per pak</th>
+                                                                <th className="px-3 py-2 text-left text-slate-900 font-semibold">Totaal stuks</th>
+                                                            </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                            {itemsForOrder.map((item, idx) => (
+                                                                <tr key={idx} className="border-t border-gray-200">
+                                                                    <td className="px-3 py-2 text-slate-900 font-medium">{item.product_name}</td>
+                                                                    <td className="px-3 py-2 text-slate-700">{item.quantity}</td>
+                                                                    <td className="px-3 py-2 text-slate-700">{item.units_per_box}</td>
+                                                                    <td className="px-3 py-2 text-slate-900 font-semibold">{item.actual_quantity}</td>
+                                                                </tr>
+                                                            ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+
+                                                <div className="flex justify-end mt-3">
+                                                    <button
+                                                        onClick={() => deleteOrder(order.id)}
+                                                        className="px-3 py-1.5 rounded border border-red-300 text-red-600 hover:bg-red-50 transition text-sm font-medium"
+                                                    >
+                                                        Verwijderen
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 );
                             })}
                         </div>
                     )}
                 </div>
-
-                {/* Pakbon details */}
-                {selectedOrderId && selectedOrderItems.length > 0 && (
-                    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-semibold text-slate-900">Pakbon details</h2>
-                            <div className="flex items-center gap-3">
-                                <button onClick={() => deleteOrder(selectedOrderId)} className="px-3 py-1.5 rounded border border-red-300 text-red-600 hover:bg-red-50 transition text-sm font-medium">Verwijderen</button>
-                                <button onClick={() => { setSelectedOrderId(null); setSelectedOrderItems([]); }} className="text-sm text-green-600 hover:text-green-700 font-medium">Sluiten</button>
-                            </div>
-                        </div>
-                        <div className="rounded-lg border border-gray-200 overflow-hidden">
-                            <table className="min-w-full text-sm">
-                                <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-3 py-2 text-left text-slate-900 font-semibold">Product</th>
-                                    <th className="px-3 py-2 text-left text-slate-900 font-semibold">Aantal (pakbon)</th>
-                                    <th className="px-3 py-2 text-left text-slate-900 font-semibold">Stuks per pak</th>
-                                    <th className="px-3 py-2 text-left text-slate-900 font-semibold">Totaal stuks</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                {selectedOrderItems.map((item, idx) => (
-                                    <tr key={idx} className="border-t border-gray-200">
-                                        <td className="px-3 py-2 text-slate-900 font-medium">{item.product_name}</td>
-                                        <td className="px-3 py-2 text-slate-700">{item.quantity}</td>
-                                        <td className="px-3 py-2 text-slate-700">{item.units_per_box}</td>
-                                        <td className="px-3 py-2 text-slate-900 font-semibold">{item.actual_quantity}</td>
-                                    </tr>
-                                ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );
