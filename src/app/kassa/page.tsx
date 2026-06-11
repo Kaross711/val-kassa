@@ -723,13 +723,13 @@ export default function KassaPage() {
                         {archivedProducts.length === 0 ? (
                             <p className="text-slate-600 text-sm">Geen verborgen producten.</p>
                         ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
                                 {archivedProducts.map((p) => (
                                     <div
                                         key={p.id}
-                                        className="rounded-lg border border-gray-200 bg-white/90 backdrop-blur-sm p-3 shadow-sm hover:shadow-md transition"
+                                        className="rounded-lg border border-gray-200 bg-white/90 backdrop-blur-sm p-2 shadow-sm hover:shadow-md transition"
                                     >
-                                        <div className="font-semibold text-sm text-slate-900 mb-1.5">{p.name}</div>
+                                        <div className="font-semibold text-xs text-slate-900 mb-1.5">{p.name}</div>
                                         <button
                                             onClick={() => restoreProduct(p.id)}
                                             className="w-full mt-1 px-2 py-2 min-h-[44px] rounded-md bg-green-500 text-white text-xs font-semibold hover:brightness-110 active:scale-95 transition"
@@ -746,7 +746,7 @@ export default function KassaPage() {
                         {filtered.length === 0 ? (
                             <p className="text-slate-600 text-sm">Geen producten gevonden.</p>
                         ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
                                 {filtered.map((p) => {
                                     const hasPrice = p.price !== null && p.price !== undefined;
 
@@ -755,15 +755,15 @@ export default function KassaPage() {
                                             key={p.id}
                                             type="button"
                                             onClick={() => openModal(p)}
-                                            className="rounded-lg border-2 border-gray-200 bg-white/90 backdrop-blur-sm p-3 min-h-[88px] shadow-sm active:shadow-lg active:border-blue-400 transition cursor-pointer active:scale-95 text-left"
+                                            className="rounded-lg border-2 border-gray-200 bg-white/90 backdrop-blur-sm p-2 shadow-sm active:shadow-lg active:border-blue-400 transition cursor-pointer active:scale-95 text-left"
                                         >
-                                            <div className="font-bold text-sm text-slate-900 mb-1 leading-tight break-words min-h-[2.25rem] flex items-center">
+                                            <div className="font-bold text-[11px] text-slate-900 mb-1 leading-tight break-words min-h-[2rem] flex items-center">
                                                 {p.name}
                                             </div>
-                                            <div className="text-base font-bold text-blue-600 mb-0.5">
+                                            <div className="text-xs font-bold text-blue-600 mb-0.5">
                                                 {hasPrice ? `€ ${p.price!.toFixed(2)}` : "€ -.--"}
                                             </div>
-                                            <div className="text-xs text-slate-500">
+                                            <div className="text-[10px] text-slate-500">
                                                 per {p.unit}
                                             </div>
                                         </button>
