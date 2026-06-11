@@ -545,7 +545,8 @@ export default function KassaPage() {
 
     // ---------- Afrekenen - AANGEPAST MET SALE_TYPE EN BETALING ----------
     async function checkout() {
-        if (cart.length === 0) return;
+        // 'saving' check voorkomt dubbele bonnen bij twee keer snel tikken
+        if (cart.length === 0 || saving) return;
 
         // Validatie bij contante betaling
         if (paymentMethod === "CONTANT") {

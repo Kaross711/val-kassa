@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
-import OpenAI from "openai";
 
 // ---------- Types ----------
 type Product = {
@@ -83,11 +82,6 @@ type ScannedItem = {
     quantity: number;
     confidence: number; // 0-1 score van AI
 };
-
-const openai = new OpenAI({
-    apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
-    dangerouslyAllowBrowser: true,
-});
 
 export default function InkoopPage() {
     // ---------- State ----------
@@ -280,6 +274,15 @@ export default function InkoopPage() {
     }
 
     // ---------- Image scanning ----------
+    function readFileAsDataURL(file: File): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => reject(new Error("Kon de foto niet lezen."));
+            reader.readAsDataURL(file);
+        });
+    }
+
     async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -288,98 +291,59 @@ export default function InkoopPage() {
         setError(null);
 
         try {
-            const reader = new FileReader();
-            reader.onload = async (event: ProgressEvent<FileReader>) => {
-                const base64 = event.target?.result as string;
-                setUploadedImage(base64);
+            const base64 = await readFileAsDataURL(file);
+            setUploadedImage(base64);
 
-                const response = await openai.chat.completions.create({
-                    model: "gpt-4o",
-                    messages: [
-                        {
-                            role: "user",
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `Je bent een assistent voor een groenteboer. Analyseer deze pakbon/leveringsbon en extraheer:
-1. ALLE producten met hun aantallen (aantal dozen/pakken)
-2. Het TOTAALBEDRAG (onderaan de bon, meestal "Totaal" of "Te betalen")
-3. Geef voor elk product een confidence score (0-1) over hoe zeker je bent van de match
+            // OCR draait server-side zodat de OpenAI key niet in de browser belandt
+            const res = await fetch("/api/ocr", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ image: base64 }),
+            });
 
-Retourneer alleen JSON in dit formaat:
-{
-  "items": [
-    {"product_name": "naam", "quantity": aantal, "confidence": 0.95}
-  ],
-  "total_amount": 123.45
-}
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data) {
+                throw new Error(data?.error || "Foto-analyse mislukt. Probeer het opnieuw of voer handmatig in.");
+            }
 
-Let op:
-- Hoeveelheden kunnen zijn: "2x", "3 st", "5 doos", etc.
-- Probeer productnamen te normaliseren (bijv. "Tomaten" i.p.v. "Tom.")
-- Als je onzeker bent over een product, geef lagere confidence (<0.7)
-- Als geen totaalbedrag zichtbaar is, zet total_amount op 0`,
-                                },
-                                {
-                                    type: "image_url",
-                                    image_url: { url: base64 },
-                                },
-                            ],
-                        },
-                    ],
-                    max_tokens: 1000,
-                });
+            const scannedItems: ScannedItem[] = data.items || [];
+            const scannedTotal = data.total_amount || 0;
 
-                const content = response.choices[0]?.message?.content?.trim() || "";
-                const jsonMatch = content.match(/\{[\s\S]*\}/);
+            // Zet totaal bedrag
+            setTotalAmount(scannedTotal);
 
-                if (!jsonMatch) {
-                    throw new Error("Geen geldige JSON teruggekregen van AI");
+            // Match producten
+            const matched: PurchaseItem[] = [];
+            const unmatched: UnmatchedItem[] = [];
+
+            for (const scanned of scannedItems) {
+                const bestMatch = findBestMatch(scanned.product_name);
+
+                if (bestMatch && scanned.confidence >= 0.7) {
+                    // Hoge confidence - automatisch matchen
+                    matched.push({
+                        product_id: bestMatch.id,
+                        product_name: bestMatch.name,
+                        quantity: scanned.quantity,
+                        units_per_box: 1,
+                        actual_quantity: scanned.quantity,
+                        matched: true,
+                        confidence: "high",
+                    });
+                } else {
+                    // Lage confidence - gebruiker moet kiezen
+                    const suggestions = findSimilarProducts(scanned.product_name, 5);
+                    unmatched.push({
+                        scanned_name: scanned.product_name,
+                        quantity: scanned.quantity,
+                        suggestions,
+                    });
                 }
+            }
 
-                const parsed = JSON.parse(jsonMatch[0]);
-                const scannedItems: ScannedItem[] = parsed.items || [];
-                const scannedTotal = parsed.total_amount || 0;
-
-                // Zet totaal bedrag
-                setTotalAmount(scannedTotal);
-
-                // Match producten
-                const matched: PurchaseItem[] = [];
-                const unmatched: UnmatchedItem[] = [];
-
-                for (const scanned of scannedItems) {
-                    const bestMatch = findBestMatch(scanned.product_name);
-                    const confidence = scanned.confidence >= 0.7 ? "high" : "low";
-
-                    if (bestMatch && scanned.confidence >= 0.7) {
-                        // Hoge confidence - automatisch matchen
-                        matched.push({
-                            product_id: bestMatch.id,
-                            product_name: bestMatch.name,
-                            quantity: scanned.quantity,
-                            units_per_box: 1,
-                            actual_quantity: scanned.quantity,
-                            matched: true,
-                            confidence: "high",
-                        });
-                    } else {
-                        // Lage confidence - gebruiker moet kiezen
-                        const suggestions = findSimilarProducts(scanned.product_name, 5);
-                        unmatched.push({
-                            scanned_name: scanned.product_name,
-                            quantity: scanned.quantity,
-                            suggestions,
-                        });
-                    }
-                }
-
-                setItems(matched);
-                setUnmatchedItems(unmatched);
-                setNotification(`${matched.length} producten herkend, ${unmatched.length} ter controle`);
-            };
-
-            reader.readAsDataURL(file);
+            setItems(matched);
+            setUnmatchedItems(unmatched);
+            setNotification(`${matched.length} producten herkend, ${unmatched.length} ter controle`);
         } catch (err: unknown) {
             if (err instanceof Error) {
                 setError(err.message || "Fout bij verwerken foto");

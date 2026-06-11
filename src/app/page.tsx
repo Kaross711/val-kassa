@@ -8,8 +8,8 @@ export default function Home() {
           Kassa
         </a>{" "}
         of{" "}
-        <a className="underline decoration-orange-500/70 underline-offset-4 hover:text-orange-600 font-medium" href="/admin/prices">
-          Dagprijzen
+        <a className="underline decoration-orange-500/70 underline-offset-4 hover:text-orange-600 font-medium" href="/inkoop">
+          Inkoop
         </a>
         .
       </p>
@@ -20,7 +20,7 @@ export default function Home() {
           <h2 className="text-xl font-semibold text-slate-900">Snel starten</h2>
           <ul className="mt-3 grid gap-2 text-sm text-slate-700">
             <li>• Voeg producten toe aan je bon in <a className="underline font-medium text-green-600" href="/kassa">Kassa</a></li>
-            <li>• Beheer prijzen in <a className="underline font-medium text-orange-600" href="/admin/prices">Dagprijzen</a></li>
+            <li>• Scan pakbonnen en beheer inkopen in <a className="underline font-medium text-orange-600" href="/inkoop">Inkoop</a></li>
             <li>• Bekijk omzet in <a className="underline font-medium text-red-600" href="/verkoop">Verkoop</a></li>
           </ul>
         </div>
