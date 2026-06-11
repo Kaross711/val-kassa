@@ -283,15 +283,44 @@ export default function InkoopPage() {
         });
     }
 
+    // Telefoonfoto's zijn 3-8MB; verkleinen vóór upload scheelt veel tijd op mobiel internet
+    function compressImage(dataUrl: string, maxDim = 1600, quality = 0.8): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+                if (scale === 1 && dataUrl.length < 1_000_000) {
+                    resolve(dataUrl);
+                    return;
+                }
+                const canvas = document.createElement("canvas");
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+                const ctx = canvas.getContext("2d");
+                if (!ctx) {
+                    resolve(dataUrl);
+                    return;
+                }
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL("image/jpeg", quality));
+            };
+            img.onerror = () => reject(new Error("Kon de foto niet verwerken."));
+            img.src = dataUrl;
+        });
+    }
+
     async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
+        // reset zodat dezelfde foto opnieuw kiezen ook een change-event geeft
+        e.target.value = "";
         if (!file) return;
 
         setProcessing(true);
         setError(null);
 
         try {
-            const base64 = await readFileAsDataURL(file);
+            const raw = await readFileAsDataURL(file);
+            const base64 = await compressImage(raw);
             setUploadedImage(base64);
 
             // OCR draait server-side zodat de OpenAI key niet in de browser belandt
@@ -642,37 +671,56 @@ export default function InkoopPage() {
                 <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
                     <h2 className="text-xl font-semibold text-slate-900 mb-4">Pakbon scannen</h2>
 
-                    <label className="block cursor-pointer">
-                        <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-green-400 hover:bg-green-50 transition">
-                            {processing ? (
-                                <div className="text-slate-600">
-                                    <div className="animate-spin inline-block w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full mb-2"></div>
-                                    <p>Pakbon analyseren...</p>
+                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center">
+                        {processing ? (
+                            <div className="text-slate-600 py-4">
+                                <div className="animate-spin inline-block w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full mb-2"></div>
+                                <p>Pakbon analyseren… dit kan even duren</p>
+                            </div>
+                        ) : (
+                            <>
+                                {uploadedImage ? (
+                                    <p className="text-green-600 font-medium mb-3">✓ Pakbon geüpload — maak een nieuwe foto om te vervangen</p>
+                                ) : (
+                                    <p className="text-sm text-slate-600 mb-3">De AI herkent automatisch producten en bedragen</p>
+                                )}
+                                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                                    <label className="cursor-pointer flex-1 sm:flex-none sm:min-w-[200px] px-4 py-3 min-h-[48px] rounded-xl bg-green-500 text-white font-semibold hover:bg-green-600 active:scale-95 transition shadow-md flex items-center justify-center">
+                                        📸 Maak foto
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            capture="environment"
+                                            onChange={handleImageUpload}
+                                            className="hidden"
+                                            disabled={processing}
+                                        />
+                                    </label>
+                                    <label className="cursor-pointer flex-1 sm:flex-none sm:min-w-[200px] px-4 py-3 min-h-[48px] rounded-xl border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 active:bg-gray-100 transition flex items-center justify-center">
+                                        🖼️ Kies uit galerij
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleImageUpload}
+                                            className="hidden"
+                                            disabled={processing}
+                                        />
+                                    </label>
                                 </div>
-                            ) : uploadedImage ? (
-                                <div>
-                                    <p className="text-green-600 font-medium mb-2">✓ Pakbon geüpload</p>
-                                    <p className="text-sm text-slate-600">Upload opnieuw om te vervangen</p>
-                                </div>
-                            ) : (
-                                <div>
-                                    <p className="text-slate-900 font-medium mb-1">📸 Foto van pakbon uploaden</p>
-                                    <p className="text-sm text-slate-600">De AI herkent automatisch producten en bedragen</p>
-                                </div>
-                            )}
-                        </div>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageUpload}
-                            className="hidden"
-                            disabled={processing}
-                        />
-                    </label>
+                            </>
+                        )}
+                    </div>
 
                     {uploadedImage && (
-                        <div className="mt-4">
+                        <div className="mt-4 relative inline-block w-full">
                             <img src={uploadedImage} alt="Pakbon" className="max-w-full max-h-64 mx-auto rounded-lg border border-gray-200" />
+                            <button
+                                onClick={() => setUploadedImage(null)}
+                                className="absolute top-2 right-2 min-w-[44px] min-h-[44px] rounded-full bg-slate-800/80 text-white font-bold hover:bg-slate-700 active:scale-95 transition"
+                                aria-label="Foto verwijderen"
+                            >
+                                ✕
+                            </button>
                         </div>
                     )}
                 </div>
@@ -686,13 +734,17 @@ export default function InkoopPage() {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Zoek product</label>
                             <input
                                 type="text"
+                                inputMode="search"
                                 value={manualSearch}
-                                onChange={(e) => setManualSearch(e.target.value)}
+                                onChange={(e) => {
+                                    setManualSearch(e.target.value);
+                                    setManualProductId("");
+                                }}
                                 placeholder="Type om te zoeken..."
-                                className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-400"
+                                className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 placeholder:text-slate-400"
                             />
-                            {manualSearch && filteredProducts.length > 0 && (
-                                <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded">
+                            {manualSearch && !manualProductId && filteredProducts.length > 0 && (
+                                <div className="mt-2 max-h-56 overflow-y-auto border border-gray-200 rounded-lg">
                                     {filteredProducts.slice(0, 10).map((p) => (
                                         <button
                                             key={p.id}
@@ -700,7 +752,7 @@ export default function InkoopPage() {
                                                 setManualProductId(p.id);
                                                 setManualSearch(p.name);
                                             }}
-                                            className="w-full text-left px-3 py-2 hover:bg-green-50 text-sm border-b border-gray-100 last:border-b-0"
+                                            className="w-full text-left px-3 py-3 min-h-[48px] hover:bg-green-50 active:bg-green-100 text-sm border-b border-gray-100 last:border-b-0 transition"
                                         >
                                             <div className="font-medium text-slate-900">{p.name}</div>
                                             <div className="text-xs text-slate-500">{p.unit}</div>
@@ -714,11 +766,12 @@ export default function InkoopPage() {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Aantal (pakbon)</label>
                             <input
                                 type="number"
+                                inputMode="numeric"
                                 min="1"
                                 step="1"
                                 value={manualQty}
                                 onChange={(e) => setManualQty(Number(e.target.value))}
-                                className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900"
+                                className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-slate-900"
                             />
                         </div>
 
@@ -726,11 +779,12 @@ export default function InkoopPage() {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Stuks per pak</label>
                             <input
                                 type="number"
+                                inputMode="numeric"
                                 min="1"
                                 step="1"
                                 value={manualUPB}
                                 onChange={(e) => setManualUPB(Number(e.target.value))}
-                                className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900"
+                                className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-slate-900"
                             />
                         </div>
 
@@ -738,7 +792,7 @@ export default function InkoopPage() {
                             <button
                                 onClick={addManualProduct}
                                 disabled={!manualProductId}
-                                className="w-full py-2 rounded bg-green-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-600 transition"
+                                className="w-full py-2.5 min-h-[44px] rounded-lg bg-green-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-600 active:scale-95 transition"
                             >
                                 Toevoegen
                             </button>
@@ -760,14 +814,14 @@ export default function InkoopPage() {
                                             <div className="font-semibold text-slate-900 text-lg">{unmatched.scanned_name}</div>
                                             <div className="text-sm text-slate-600">Aantal: {unmatched.quantity}</div>
                                         </div>
-                                        <button onClick={() => skipUnmatched(idx)} className="text-sm text-slate-500 hover:text-slate-700">Overslaan</button>
+                                        <button onClick={() => skipUnmatched(idx)} className="shrink-0 px-3 py-2 min-h-[44px] rounded-lg border border-gray-300 text-sm text-slate-600 hover:bg-gray-50 active:bg-gray-100 font-medium transition">Overslaan</button>
                                     </div>
                                     {unmatched.suggestions.length > 0 ? (
                                         <>
                                             <div className="text-sm font-medium text-slate-700 mb-2">Selecteer het juiste product:</div>
                                             <div className="grid gap-2">
                                                 {unmatched.suggestions.map((suggestion) => (
-                                                    <button key={suggestion.id} onClick={() => selectMatch(idx, suggestion)} className="text-left px-3 py-2 rounded border border-gray-200 hover:border-green-400 hover:bg-green-50 transition">
+                                                    <button key={suggestion.id} onClick={() => selectMatch(idx, suggestion)} className="text-left px-3 py-3 min-h-[48px] rounded-lg border border-gray-200 bg-green-50/50 hover:border-green-400 hover:bg-green-50 active:bg-green-100 transition">
                                                         <div className="font-medium text-slate-900">{suggestion.name}</div>
                                                         <div className="text-xs text-slate-500">{suggestion.unit === "KILO" ? "Per kilo" : "Per stuk"}</div>
                                                     </button>
@@ -803,12 +857,13 @@ export default function InkoopPage() {
                                 </label>
                                 <input
                                     type="number"
+                                    inputMode="decimal"
                                     min="0"
                                     step="0.01"
                                     value={totalAmount}
                                     onChange={(e) => setTotalAmount(Number(e.target.value))}
                                     placeholder="123.45"
-                                    className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-400 font-semibold text-lg"
+                                    className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 placeholder:text-slate-400 font-semibold text-lg"
                                 />
                             </div>
 
@@ -826,7 +881,45 @@ export default function InkoopPage() {
                             </div>
                         </div>
 
-                        <div className="rounded-lg border border-gray-200 overflow-hidden">
+                        {/* Mobiel: cards, desktop: tabel */}
+                        <div className="md:hidden space-y-3">
+                            {items.map((item, idx) => (
+                                <div key={idx} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                                    <div className="flex items-start justify-between gap-2 mb-2">
+                                        <div>
+                                            <div className="font-semibold text-slate-900">{item.product_name}</div>
+                                            {item.confidence === "high" ? (
+                                                <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full mt-1">✓ Zeker</span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full mt-1">⚠ Handmatig</span>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() => removeItem(idx)}
+                                            className="shrink-0 min-w-[44px] min-h-[44px] rounded-lg text-lg text-red-600 hover:bg-red-50 active:bg-red-100 font-medium transition"
+                                            aria-label={`${item.product_name} verwijderen`}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2 text-sm">
+                                        <div>
+                                            <div className="text-xs text-slate-500 mb-1">Aantal (pakbon)</div>
+                                            <div className="py-2.5 text-slate-700 font-medium">{item.quantity}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-slate-500 mb-1">Stuks per pak</div>
+                                            <input type="number" inputMode="numeric" min="1" step="1" value={item.units_per_box} onChange={(e) => updateUnitsPerBox(idx, Number(e.target.value))} className="w-full min-h-[44px] border border-gray-300 rounded-lg px-2 py-1 text-center bg-white text-slate-900" />
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-slate-500 mb-1">Totaal stuks</div>
+                                            <input type="number" inputMode="numeric" min="1" step="1" value={item.actual_quantity} onChange={(e) => updateActualQuantity(idx, Number(e.target.value))} className="w-full min-h-[44px] border border-gray-300 rounded-lg px-2 py-1 text-center bg-white text-slate-900 font-semibold" />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="hidden md:block rounded-lg border border-gray-200 overflow-x-auto">
                             <table className="min-w-full text-sm">
                                 <thead className="bg-gray-50">
                                 <tr>
@@ -855,13 +948,13 @@ export default function InkoopPage() {
                                         </td>
                                         <td className="px-3 py-2 text-slate-700">{item.quantity}</td>
                                         <td className="px-3 py-2">
-                                            <input type="number" min="1" step="1" value={item.units_per_box} onChange={(e) => updateUnitsPerBox(idx, Number(e.target.value))} className="w-20 border border-gray-300 rounded px-2 py-1 bg-white text-slate-900" />
+                                            <input type="number" inputMode="numeric" min="1" step="1" value={item.units_per_box} onChange={(e) => updateUnitsPerBox(idx, Number(e.target.value))} className="w-20 min-h-[44px] border border-gray-300 rounded px-2 py-1 bg-white text-slate-900" />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <input type="number" min="1" step="1" value={item.actual_quantity} onChange={(e) => updateActualQuantity(idx, Number(e.target.value))} className="w-20 border border-gray-300 rounded px-2 py-1 bg-white text-slate-900 font-semibold" />
+                                            <input type="number" inputMode="numeric" min="1" step="1" value={item.actual_quantity} onChange={(e) => updateActualQuantity(idx, Number(e.target.value))} className="w-20 min-h-[44px] border border-gray-300 rounded px-2 py-1 bg-white text-slate-900 font-semibold" />
                                         </td>
                                         <td className="px-3 py-2">
-                                            <button onClick={() => removeItem(idx)} className="text-sm text-red-600 hover:text-red-700 font-medium">✕</button>
+                                            <button onClick={() => removeItem(idx)} className="min-w-[44px] min-h-[44px] rounded-lg text-base text-red-600 hover:bg-red-50 active:bg-red-100 font-medium transition" aria-label={`${item.product_name} verwijderen`}>✕</button>
                                         </td>
                                     </tr>
                                 ))}
@@ -900,10 +993,10 @@ export default function InkoopPage() {
                             <button
                                 key={p}
                                 onClick={() => setPeriod(p)}
-                                className={`px-4 py-2 rounded-lg font-semibold transition text-sm ${
+                                className={`px-4 py-2.5 min-h-[44px] rounded-lg font-semibold transition text-sm ${
                                     period === p
                                         ? "bg-green-500 text-white shadow-md"
-                                        : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
+                                        : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50 active:bg-gray-100"
                                 }`}
                             >
                                 {p === "custom" ? "Aangepaste periode" : periodLabels[p]}
@@ -914,14 +1007,14 @@ export default function InkoopPage() {
                     {/* Custom datumrange */}
                     {period === "custom" && (
                         <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 mb-4">
-                            <div className="flex flex-wrap gap-4 items-end">
+                            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 sm:items-end">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Van</label>
                                     <input
                                         type="date"
                                         value={formatDateForInput(customStart)}
                                         onChange={(e) => setCustomStart(parseDateLocal(e.target.value))}
-                                        className="border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                        className="w-full sm:w-auto min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 text-slate-900"
                                     />
                                 </div>
                                 <div>
@@ -930,7 +1023,7 @@ export default function InkoopPage() {
                                         type="date"
                                         value={formatDateForInput(customEnd)}
                                         onChange={(e) => setCustomEnd(parseDateLocal(e.target.value))}
-                                        className="border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                        className="w-full sm:w-auto min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 text-slate-900"
                                     />
                                 </div>
                             </div>
