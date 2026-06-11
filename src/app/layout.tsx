@@ -41,8 +41,8 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
     return (
         <Link
             href={href}
-            className="relative px-1.5 md:px-3 py-1 md:py-1.5 text-[10px] md:text-sm text-slate-700 hover:text-slate-900 transition font-medium whitespace-nowrap
-                 after:absolute after:inset-x-0.5 md:after:inset-x-2 after:-bottom-[2px] after:h-[2px] after:scale-x-0 after:bg-gradient-to-r
+            className="relative flex items-center px-2.5 md:px-3 py-2.5 min-h-[44px] text-sm text-slate-700 hover:text-slate-900 active:text-slate-900 transition font-medium whitespace-nowrap
+                 after:absolute after:inset-x-1 md:after:inset-x-2 after:bottom-0.5 after:h-[2px] after:scale-x-0 after:bg-gradient-to-r
                  after:from-green-400 after:via-orange-400 after:to-red-500 after:rounded-full
                  hover:after:scale-x-100 after:transition-transform after:origin-left"
         >

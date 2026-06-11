@@ -642,15 +642,15 @@ export default function VerkoopPage() {
         return (
             <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div
-                    className={`${bgColor} px-6 py-4 border-b border-gray-200 cursor-pointer hover:brightness-95 transition`}
+                    className={`${bgColor} px-4 sm:px-6 py-4 border-b border-gray-200 cursor-pointer hover:brightness-95 active:brightness-90 transition`}
                     onClick={onToggle}
                 >
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
-                            <button className={`text-2xl ${color} font-bold`}>
+                            <span className={`text-2xl ${color} font-bold`}>
                                 {isCollapsed ? "▶" : "▼"}
-                            </button>
-                            <h2 className={`text-xl font-bold ${color}`}>{title}</h2>
+                            </span>
+                            <h2 className={`text-lg sm:text-xl font-bold ${color}`}>{title}</h2>
                         </div>
                         <div className="text-right">
                             <div className={`text-2xl font-bold ${color}`}>
@@ -664,7 +664,7 @@ export default function VerkoopPage() {
                 </div>
 
                 {!isCollapsed && (
-                    <div className="p-6">
+                    <div className="p-4 sm:p-6">
                         {filteredReceipts.length === 0 ? (
                             <p className="text-slate-500 text-sm text-center py-8">
                                 Geen {title.toLowerCase()} gevonden met de huidige filters.
@@ -700,9 +700,9 @@ export default function VerkoopPage() {
                                                         <div className="text-xl font-bold text-slate-900">
                                                             € {receipt.total_gross.toFixed(2)}
                                                         </div>
-                                                        <button className="text-xs text-blue-600 hover:text-blue-700 mt-1">
+                                                        <span className="inline-block text-sm text-blue-600 mt-1 py-1">
                                                             {isExpanded ? "▼ Details" : "▶ Details"}
-                                                        </button>
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -759,7 +759,7 @@ export default function VerkoopPage() {
                                                                         e.stopPropagation();
                                                                         deleteReceipt(receipt.id);
                                                                     }}
-                                                                    className="text-sm text-red-600 hover:text-red-700 font-medium"
+                                                                    className="px-3 py-2 min-h-[44px] rounded-lg border border-red-300 text-sm text-red-600 hover:bg-red-50 active:bg-red-100 font-medium transition"
                                                                 >
                                                                     Verwijderen
                                                                 </button>
@@ -786,15 +786,15 @@ export default function VerkoopPage() {
         return (
             <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div
-                    className="bg-red-50 px-6 py-4 border-b border-gray-200 cursor-pointer hover:brightness-95 transition"
+                    className="bg-red-50 px-4 sm:px-6 py-4 border-b border-gray-200 cursor-pointer hover:brightness-95 active:brightness-90 transition"
                     onClick={() => toggleSection('inkoop')}
                 >
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
-                            <button className="text-2xl text-red-700 font-bold">
+                            <span className="text-2xl text-red-700 font-bold">
                                 {isCollapsed ? "▶" : "▼"}
-                            </button>
-                            <h2 className="text-xl font-bold text-red-700">Inkopen</h2>
+                            </span>
+                            <h2 className="text-lg sm:text-xl font-bold text-red-700">Inkopen</h2>
                         </div>
                         <div className="text-right">
                             <div className="text-2xl font-bold text-red-700">
@@ -808,7 +808,7 @@ export default function VerkoopPage() {
                 </div>
 
                 {!isCollapsed && (
-                    <div className="p-6">
+                    <div className="p-4 sm:p-6">
                         {purchaseOrders.length === 0 ? (
                             <p className="text-slate-500 text-sm text-center py-8">
                                 Geen inkopen in deze periode.
@@ -876,11 +876,11 @@ export default function VerkoopPage() {
             <div className="mx-auto max-w-7xl px-4 py-8">
                 {/* Header */}
                 <div className="mb-8">
-                    <div className="flex justify-between items-center mb-6">
-                        <h1 className="text-3xl font-bold text-slate-900">Verkoop & Inkoop overzicht</h1>
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Verkoop & Inkoop overzicht</h1>
                         <button
                             onClick={exportToCSV}
-                            className="px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 transition shadow-md"
+                            className="px-4 py-2.5 min-h-[44px] rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 active:scale-95 transition shadow-md whitespace-nowrap"
                         >
                             📥 Exporteer CSV
                         </button>
@@ -890,7 +890,7 @@ export default function VerkoopPage() {
                     <div className="flex flex-wrap gap-2 mb-6">
                         <button
                             onClick={() => setSelectedPeriod("vandaag")}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${
+                            className={`px-4 py-2.5 min-h-[44px] text-sm rounded-lg font-semibold transition ${
                                 selectedPeriod === "vandaag"
                                     ? "bg-blue-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -900,7 +900,7 @@ export default function VerkoopPage() {
                         </button>
                         <button
                             onClick={() => setSelectedPeriod("week")}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${
+                            className={`px-4 py-2.5 min-h-[44px] text-sm rounded-lg font-semibold transition ${
                                 selectedPeriod === "week"
                                     ? "bg-blue-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -910,7 +910,7 @@ export default function VerkoopPage() {
                         </button>
                         <button
                             onClick={() => setSelectedPeriod("maand")}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${
+                            className={`px-4 py-2.5 min-h-[44px] text-sm rounded-lg font-semibold transition ${
                                 selectedPeriod === "maand"
                                     ? "bg-blue-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -923,7 +923,7 @@ export default function VerkoopPage() {
                                 setSelectedPeriod("custom");
                                 setShowCustomDatePicker(true);
                             }}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${
+                            className={`px-4 py-2.5 min-h-[44px] text-sm rounded-lg font-semibold transition ${
                                 selectedPeriod === "custom"
                                     ? "bg-blue-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -933,7 +933,7 @@ export default function VerkoopPage() {
                         </button>
                         <button
                             onClick={() => setSelectedPeriod("alles")}
-                            className={`px-4 py-2 rounded-lg font-semibold transition ${
+                            className={`px-4 py-2.5 min-h-[44px] text-sm rounded-lg font-semibold transition ${
                                 selectedPeriod === "alles"
                                     ? "bg-blue-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -946,7 +946,7 @@ export default function VerkoopPage() {
                     {/* Custom date picker */}
                     {showCustomDatePicker && selectedPeriod === "custom" && (
                         <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 p-4 mb-6 shadow-sm">
-                            <div className="flex gap-4 items-end">
+                            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 sm:items-end">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Van</label>
                                     <input
@@ -956,7 +956,7 @@ export default function VerkoopPage() {
                                             ...prev,
                                             start: parseDateLocal(e.target.value)
                                         }))}
-                                        className="border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                        className="w-full sm:w-auto min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 text-slate-900"
                                     />
                                 </div>
                                 <div>
@@ -968,92 +968,94 @@ export default function VerkoopPage() {
                                             ...prev,
                                             end: parseDateLocal(e.target.value)
                                         }))}
-                                        className="border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                        className="w-full sm:w-auto min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 text-slate-900"
                                     />
                                 </div>
-                                <button
-                                    onClick={() => loadData()}
-                                    className="px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 transition"
-                                >
-                                    Toepassen
-                                </button>
-                                <button
-                                    onClick={() => setShowCustomDatePicker(false)}
-                                    className="px-4 py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
-                                >
-                                    Verbergen
-                                </button>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => loadData()}
+                                        className="flex-1 sm:flex-none px-4 py-2.5 min-h-[44px] rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 active:scale-95 transition"
+                                    >
+                                        Toepassen
+                                    </button>
+                                    <button
+                                        onClick={() => setShowCustomDatePicker(false)}
+                                        className="flex-1 sm:flex-none px-4 py-2.5 min-h-[44px] rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 active:bg-gray-100 transition"
+                                    >
+                                        Verbergen
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
 
                     {/* Statistieken */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-                        <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm p-4">
-                            <div className="text-sm text-slate-600 mb-1">Totaal transacties</div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
+                        <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
+                            <div className="text-xs sm:text-sm text-slate-600 mb-1">Totaal transacties</div>
                             <div className="text-2xl font-bold text-slate-900">{stats.totaalTransacties}</div>
                         </div>
-                        <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm p-4">
-                            <div className="text-sm text-slate-600 mb-1">Gemiddelde bon</div>
+                        <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
+                            <div className="text-xs sm:text-sm text-slate-600 mb-1">Gemiddelde bon</div>
                             <div className="text-2xl font-bold text-slate-900">€ {stats.gemiddeldeBon.toFixed(2)}</div>
                         </div>
-                        <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm p-4">
-                            <div className="text-sm text-slate-600 mb-1">Hoogste bon</div>
+                        <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
+                            <div className="text-xs sm:text-sm text-slate-600 mb-1">Hoogste bon</div>
                             <div className="text-2xl font-bold text-green-600">€ {stats.hoogsteBon.toFixed(2)}</div>
                         </div>
-                        <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm p-4">
-                            <div className="text-sm text-slate-600 mb-1">Laagste bon</div>
+                        <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
+                            <div className="text-xs sm:text-sm text-slate-600 mb-1">Laagste bon</div>
                             <div className="text-2xl font-bold text-slate-900">€ {stats.laagsteBon.toFixed(2)}</div>
                         </div>
-                        <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm p-4">
-                            <div className="text-sm text-slate-600 mb-1">Gem. inkoop</div>
+                        <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
+                            <div className="text-xs sm:text-sm text-slate-600 mb-1">Gem. inkoop</div>
                             <div className="text-2xl font-bold text-red-600">€ {stats.gemiddeldeInkoop.toFixed(2)}</div>
                         </div>
-                        <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm p-4">
-                            <div className="text-sm text-slate-600 mb-1">Winstmarge</div>
+                        <div className="bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
+                            <div className="text-xs sm:text-sm text-slate-600 mb-1">Winstmarge</div>
                             <div className={`text-2xl font-bold ${winstColor}`}>{stats.winstMarge.toFixed(1)}%</div>
                         </div>
                     </div>
 
                     {/* Totalen overzicht */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-8">
-                        <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-6">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4 mb-8">
+                        <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6">
                             <div className="text-sm font-medium text-blue-600 mb-1">Winkelverkopen</div>
                             <div className="text-2xl font-bold text-slate-900">€ {totals.winkel.toFixed(2)}</div>
                             <div className="text-xs text-slate-500 mt-1">{dbCounts.winkelCount || receipts.winkel.length} transacties</div>
                         </div>
 
-                        <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-6">
+                        <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6">
                             <div className="text-sm font-medium text-orange-600 mb-1">Bestellingen</div>
                             <div className="text-2xl font-bold text-slate-900">€ {totals.bestelling.toFixed(2)}</div>
                             <div className="text-xs text-slate-500 mt-1">{dbCounts.bestellingCount || receipts.bestelling.length} transacties</div>
                         </div>
 
-                        <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-6">
+                        <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6">
                             <div className="text-sm font-medium text-green-600 mb-1">Bedrijfsverkopen</div>
                             <div className="text-2xl font-bold text-slate-900">€ {totals.bedrijf.toFixed(2)}</div>
                             <div className="text-xs text-slate-500 mt-1">{dbCounts.bedrijfCount || receipts.bedrijf.length} transacties</div>
                         </div>
 
-                        <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-red-200 shadow-sm p-6">
+                        <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-red-200 shadow-sm p-4 sm:p-6">
                             <div className="text-sm font-medium text-red-600 mb-1">Totaal inkoop</div>
                             <div className="text-2xl font-bold text-red-700">€ {totals.totaalInkoop.toFixed(2)}</div>
                             <div className="text-xs text-slate-500 mt-1">{dbCounts.inkoopCount || purchaseOrders.length} orders</div>
                         </div>
 
-                        <div className={`rounded-xl shadow-sm p-6 bg-white/90 backdrop-blur-sm border ${totals.winst >= 0 ? 'border-green-200' : 'border-red-200'}`}>
+                        <div className={`rounded-xl shadow-sm p-4 sm:p-6 bg-white/90 backdrop-blur-sm border ${totals.winst >= 0 ? 'border-green-200' : 'border-red-200'}`}>
                             <div className="text-sm font-medium text-slate-600 mb-1">Bruto winst</div>
                             <div className={`text-2xl font-bold ${totals.winst >= 0 ? 'text-green-700' : 'text-red-700'}`}>€ {totals.winst.toFixed(2)}</div>
                             <div className="text-xs text-slate-500 mt-1">Verkoop - Inkoop</div>
                         </div>
 
-                        <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-purple-200 shadow-sm p-6">
+                        <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-purple-200 shadow-sm p-4 sm:p-6">
                             <div className="text-sm font-medium text-purple-600 mb-1">Vaste kosten</div>
                             <div className="text-2xl font-bold text-purple-700">€ {vasteKostenVoorPeriode.toFixed(2)}</div>
                             <div className="text-xs text-slate-500 mt-1">{dagenInPeriode} dag{dagenInPeriode !== 1 ? 'en' : ''}</div>
                         </div>
 
-                        <div className={`rounded-xl shadow-md p-6 ${nettoWinst >= 0 ? 'bg-gradient-to-br from-green-500 to-emerald-600' : 'bg-gradient-to-br from-red-500 to-rose-600'}`}>
+                        <div className={`rounded-xl shadow-md p-4 sm:p-6 ${nettoWinst >= 0 ? 'bg-gradient-to-br from-green-500 to-emerald-600' : 'bg-gradient-to-br from-red-500 to-rose-600'}`}>
                             <div className="text-sm font-medium text-white/90 mb-1">Netto winst</div>
                             <div className="text-2xl font-bold text-white">€ {nettoWinst.toFixed(2)}</div>
                             <div className="text-xs text-white/80 mt-1">
@@ -1100,15 +1102,15 @@ export default function VerkoopPage() {
                     {/* Vaste Kosten Beheer */}
                     <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                         <div
-                            className="bg-purple-50 px-6 py-4 border-b border-gray-200 cursor-pointer hover:brightness-95 transition"
+                            className="bg-purple-50 px-4 sm:px-6 py-4 border-b border-gray-200 cursor-pointer hover:brightness-95 active:brightness-90 transition"
                             onClick={() => toggleSection('vasteKosten')}
                         >
                             <div className="flex justify-between items-center">
                                 <div className="flex items-center gap-3">
-                                    <button className="text-2xl text-purple-700 font-bold">
+                                    <span className="text-2xl text-purple-700 font-bold">
                                         {collapsedSections.vasteKosten ? "▶" : "▼"}
-                                    </button>
-                                    <h2 className="text-xl font-bold text-purple-700">Vaste Kosten Beheer</h2>
+                                    </span>
+                                    <h2 className="text-lg sm:text-xl font-bold text-purple-700">Vaste Kosten Beheer</h2>
                                 </div>
                                 <div className="text-right">
                                     <div className="text-2xl font-bold text-purple-700">
@@ -1122,7 +1124,7 @@ export default function VerkoopPage() {
                         </div>
 
                         {!collapsedSections.vasteKosten && (
-                            <div className="p-6">
+                            <div className="p-4 sm:p-6">
                                 <p className="text-sm text-slate-500 mb-4 italic">
                                     Deze kosten worden proportioneel berekend per geselecteerde periode
                                 </p>
@@ -1131,24 +1133,25 @@ export default function VerkoopPage() {
                                     {fixedCosts.map((cost, index) => (
                                         <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition">
                                             {editingCostIndex === index ? (
-                                                <div className="flex flex-wrap gap-3 items-end">
-                                                    <div className="flex-1 min-w-[150px]">
+                                                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-end">
+                                                    <div className="flex-1 sm:min-w-[150px]">
                                                         <label className="block text-xs text-slate-500 mb-1">Naam</label>
                                                         <input
                                                             type="text"
                                                             value={editingCostNaam}
                                                             onChange={(e) => setEditingCostNaam(e.target.value)}
-                                                            className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                                            className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 text-slate-900"
                                                         />
                                                     </div>
-                                                    <div className="w-[140px]">
+                                                    <div className="w-full sm:w-[140px]">
                                                         <label className="block text-xs text-slate-500 mb-1">Bedrag / week</label>
                                                         <input
                                                             type="number"
+                                                            inputMode="decimal"
                                                             step="0.01"
                                                             value={editingCostBedrag}
                                                             onChange={(e) => setEditingCostBedrag(e.target.value)}
-                                                            className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                                            className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 text-slate-900"
                                                         />
                                                     </div>
                                                     <button
@@ -1161,13 +1164,13 @@ export default function VerkoopPage() {
                                                                 setEditingCostIndex(null);
                                                             }
                                                         }}
-                                                        className="px-4 py-2 rounded-lg bg-purple-500 text-white font-semibold hover:brightness-110 transition"
+                                                        className="px-4 py-2.5 min-h-[44px] rounded-lg bg-purple-500 text-white font-semibold hover:brightness-110 active:scale-95 transition"
                                                     >
                                                         Opslaan
                                                     </button>
                                                     <button
                                                         onClick={() => setEditingCostIndex(null)}
-                                                        className="px-4 py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                                        className="px-4 py-2.5 min-h-[44px] rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 active:bg-gray-100 transition"
                                                     >
                                                         Annuleren
                                                     </button>
@@ -1178,8 +1181,8 @@ export default function VerkoopPage() {
                                                         <div className="font-medium text-slate-900">{cost.naam}</div>
                                                         <div className="text-sm text-slate-500">€ {(cost.bedragPerWeek / 7).toFixed(2)} per dag</div>
                                                     </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="text-xl font-bold text-purple-700">
+                                                    <div className="flex items-center gap-1 sm:gap-2">
+                                                        <div className="text-xl font-bold text-purple-700 mr-2">
                                                             € {cost.bedragPerWeek.toFixed(2)}
                                                         </div>
                                                         <button
@@ -1188,7 +1191,7 @@ export default function VerkoopPage() {
                                                                 setEditingCostNaam(cost.naam);
                                                                 setEditingCostBedrag(cost.bedragPerWeek.toString());
                                                             }}
-                                                            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                                                            className="px-3 py-2 min-h-[44px] rounded-lg text-sm text-blue-600 hover:bg-blue-50 active:bg-blue-100 font-medium transition"
                                                         >
                                                             Bewerken
                                                         </button>
@@ -1199,7 +1202,7 @@ export default function VerkoopPage() {
                                                                     updateFixedCosts(updated);
                                                                 }
                                                             }}
-                                                            className="text-sm text-red-600 hover:text-red-700 font-medium"
+                                                            className="px-3 py-2 min-h-[44px] rounded-lg text-sm text-red-600 hover:bg-red-50 active:bg-red-100 font-medium transition"
                                                         >
                                                             Verwijderen
                                                         </button>
@@ -1213,26 +1216,27 @@ export default function VerkoopPage() {
                                 {/* Nieuwe kostenpost toevoegen */}
                                 {addingCost ? (
                                     <div className="border border-purple-200 rounded-lg p-4 bg-purple-50">
-                                        <div className="flex flex-wrap gap-3 items-end">
-                                            <div className="flex-1 min-w-[150px]">
+                                        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-end">
+                                            <div className="flex-1 sm:min-w-[150px]">
                                                 <label className="block text-xs text-slate-500 mb-1">Naam</label>
                                                 <input
                                                     type="text"
                                                     value={newCostNaam}
                                                     onChange={(e) => setNewCostNaam(e.target.value)}
                                                     placeholder="Bijv. Verzekering"
-                                                    className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                                    className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 text-slate-900"
                                                 />
                                             </div>
-                                            <div className="w-[140px]">
+                                            <div className="w-full sm:w-[140px]">
                                                 <label className="block text-xs text-slate-500 mb-1">Bedrag / week</label>
                                                 <input
                                                     type="number"
+                                                    inputMode="decimal"
                                                     step="0.01"
                                                     value={newCostBedrag}
                                                     onChange={(e) => setNewCostBedrag(e.target.value)}
                                                     placeholder="0.00"
-                                                    className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                                    className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 text-slate-900"
                                                 />
                                             </div>
                                             <button
@@ -1245,7 +1249,7 @@ export default function VerkoopPage() {
                                                         setAddingCost(false);
                                                     }
                                                 }}
-                                                className="px-4 py-2 rounded-lg bg-purple-500 text-white font-semibold hover:brightness-110 transition"
+                                                className="px-4 py-2.5 min-h-[44px] rounded-lg bg-purple-500 text-white font-semibold hover:brightness-110 active:scale-95 transition"
                                             >
                                                 Toevoegen
                                             </button>
@@ -1255,7 +1259,7 @@ export default function VerkoopPage() {
                                                     setNewCostNaam("");
                                                     setNewCostBedrag("");
                                                 }}
-                                                className="px-4 py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                                className="px-4 py-2.5 min-h-[44px] rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 active:bg-gray-100 transition"
                                             >
                                                 Annuleren
                                             </button>

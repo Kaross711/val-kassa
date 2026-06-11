@@ -658,7 +658,7 @@ export default function KassaPage() {
                     <div className="flex flex-wrap gap-1.5 mb-3">
                         <button
                             onClick={() => setSaleType("WINKEL")}
-                            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold transition text-xs sm:text-sm ${
+                            className={`px-3 sm:px-4 py-2.5 min-h-[44px] rounded-lg font-semibold transition text-sm ${
                                 saleType === "WINKEL"
                                     ? "bg-blue-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -668,7 +668,7 @@ export default function KassaPage() {
                         </button>
                         <button
                             onClick={() => setSaleType("BESTELLING")}
-                            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold transition text-xs sm:text-sm ${
+                            className={`px-3 sm:px-4 py-2.5 min-h-[44px] rounded-lg font-semibold transition text-sm ${
                                 saleType === "BESTELLING"
                                     ? "bg-orange-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -678,7 +678,7 @@ export default function KassaPage() {
                         </button>
                         <button
                             onClick={() => setSaleType("BEDRIJF")}
-                            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold transition text-xs sm:text-sm ${
+                            className={`px-3 sm:px-4 py-2.5 min-h-[44px] rounded-lg font-semibold transition text-sm ${
                                 saleType === "BEDRIJF"
                                     ? "bg-green-500 text-white shadow-md"
                                     : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
@@ -691,23 +691,24 @@ export default function KassaPage() {
                     <div className="flex flex-col sm:flex-row gap-2">
                         <input
                             type="text"
+                            inputMode="search"
                             placeholder="Zoek product…"
-                            className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 sm:py-2 bg-white text-slate-900 placeholder:text-slate-400 text-sm"
+                            className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 min-h-[44px] bg-white text-slate-900 placeholder:text-slate-400 text-base"
                             value={q}
                             onChange={(e) => setQ(e.target.value)}
                         />
                         <div className="flex gap-2">
                             <button
                                 onClick={openAddProductModal}
-                                className="flex-1 sm:flex-none px-3 py-1.5 sm:py-2 rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 transition shadow-md text-xs sm:text-sm whitespace-nowrap"
+                                className="flex-1 sm:flex-none px-3 py-2.5 min-h-[44px] rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 active:scale-95 transition shadow-md text-sm whitespace-nowrap"
                             >
                                 + Product
                             </button>
                             <button
                                 onClick={() => setShowArchived(!showArchived)}
-                                className="flex-1 sm:flex-none px-3 py-1.5 sm:py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition text-xs sm:text-sm whitespace-nowrap"
+                                className="flex-1 sm:flex-none px-3 py-2.5 min-h-[44px] rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 active:bg-gray-100 transition text-sm whitespace-nowrap"
                             >
-                                {showArchived ? "Archief" : "Archief"}
+                                Archief
                             </button>
                         </div>
                     </div>
@@ -722,16 +723,16 @@ export default function KassaPage() {
                         {archivedProducts.length === 0 ? (
                             <p className="text-slate-600 text-sm">Geen verborgen producten.</p>
                         ) : (
-                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
                                 {archivedProducts.map((p) => (
                                     <div
                                         key={p.id}
-                                        className="rounded-lg border border-gray-200 bg-white/90 backdrop-blur-sm p-2 shadow-sm hover:shadow-md transition"
+                                        className="rounded-lg border border-gray-200 bg-white/90 backdrop-blur-sm p-3 shadow-sm hover:shadow-md transition"
                                     >
-                                        <div className="font-semibold text-xs text-slate-900 mb-1.5">{p.name}</div>
+                                        <div className="font-semibold text-sm text-slate-900 mb-1.5">{p.name}</div>
                                         <button
                                             onClick={() => restoreProduct(p.id)}
-                                            className="w-full mt-1 px-2 py-0.5 rounded-md bg-green-500 text-white text-[10px] font-semibold hover:brightness-110 transition"
+                                            className="w-full mt-1 px-2 py-2 min-h-[44px] rounded-md bg-green-500 text-white text-xs font-semibold hover:brightness-110 active:scale-95 transition"
                                         >
                                             Terugzetten
                                         </button>
@@ -745,26 +746,27 @@ export default function KassaPage() {
                         {filtered.length === 0 ? (
                             <p className="text-slate-600 text-sm">Geen producten gevonden.</p>
                         ) : (
-                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
                                 {filtered.map((p) => {
                                     const hasPrice = p.price !== null && p.price !== undefined;
 
                                     return (
-                                        <div
+                                        <button
                                             key={p.id}
+                                            type="button"
                                             onClick={() => openModal(p)}
-                                            className="rounded-lg border-2 border-gray-200 bg-white/90 backdrop-blur-sm p-2 shadow-sm hover:shadow-lg hover:border-blue-400 transition cursor-pointer active:scale-95"
+                                            className="rounded-lg border-2 border-gray-200 bg-white/90 backdrop-blur-sm p-3 min-h-[88px] shadow-sm active:shadow-lg active:border-blue-400 transition cursor-pointer active:scale-95 text-left"
                                         >
-                                            <div className="font-bold text-[11px] text-slate-900 mb-1 leading-tight break-words min-h-[2rem] flex items-center">
+                                            <div className="font-bold text-sm text-slate-900 mb-1 leading-tight break-words min-h-[2.25rem] flex items-center">
                                                 {p.name}
                                             </div>
-                                            <div className="text-xs font-bold text-blue-600 mb-0.5">
+                                            <div className="text-base font-bold text-blue-600 mb-0.5">
                                                 {hasPrice ? `€ ${p.price!.toFixed(2)}` : "€ -.--"}
                                             </div>
-                                            <div className="text-[10px] text-slate-500">
+                                            <div className="text-xs text-slate-500">
                                                 per {p.unit}
                                             </div>
-                                        </div>
+                                        </button>
                                     );
                                 })}
                             </div>
@@ -778,9 +780,10 @@ export default function KassaPage() {
 
             {/* Nieuw product modal */}
             {addProductOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeAddProductModal} />
-                    <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 max-w-md w-full mx-4">
+                <div className="fixed inset-0 z-50 overflow-y-auto">
+                    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={closeAddProductModal} />
+                    <div className="flex min-h-full items-center justify-center p-4">
+                    <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 max-w-md w-full">
                         <h2 className="text-xl font-bold mb-4 text-slate-900">Nieuw product</h2>
 
                         <div className="space-y-4">
@@ -817,10 +820,11 @@ export default function KassaPage() {
                                 </label>
                                 <input
                                     type="number"
+                                    inputMode="decimal"
                                     step="0.01"
                                     value={newProductPrice}
                                     onChange={(e) => setNewProductPrice(e.target.value)}
-                                    className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base text-slate-900"
                                     placeholder="bijv. 2.50"
                                 />
                             </div>
@@ -843,14 +847,16 @@ export default function KassaPage() {
                             </button>
                         </div>
                     </div>
+                    </div>
                 </div>
             )}
 
             {/* Product modal */}
             {modalOpen && modalProduct && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeModal} />
-                    <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 max-w-md w-full mx-4">
+                <div className="fixed inset-0 z-50 overflow-y-auto">
+                    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={closeModal} />
+                    <div className="flex min-h-full items-center justify-center p-4">
+                    <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 max-w-md w-full">
                         {!editMode ? (
                             <>
                                 <h2 className="text-2xl font-bold mb-3 text-slate-900">{modalProduct.name}</h2>
@@ -908,10 +914,11 @@ export default function KassaPage() {
                                         </label>
                                         <input
                                             type="number"
+                                            inputMode="decimal"
                                             step="0.01"
                                             value={editPrice}
                                             onChange={(e) => setEditPrice(e.target.value)}
-                                            className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base text-slate-900"
                                             placeholder="bijv. 2.50"
                                         />
                                     </div>
@@ -943,6 +950,7 @@ export default function KassaPage() {
                                 </button>
                             </>
                         )}
+                    </div>
                     </div>
                 </div>
             )}
@@ -1008,7 +1016,7 @@ export default function KassaPage() {
                                                 </div>
                                                 <button
                                                     onClick={() => removeItem(ci.product_id)}
-                                                    className="text-sm text-red-600 hover:text-red-700 font-medium"
+                                                    className="shrink-0 px-3 py-2 -my-2 -mr-1 min-h-[44px] text-sm text-red-600 hover:text-red-700 active:bg-red-50 rounded-lg font-medium transition"
                                                 >
                                                     verwijderen
                                                 </button>
@@ -1022,21 +1030,22 @@ export default function KassaPage() {
                                                 <div className="mt-2 flex items-center gap-2">
                                                     <button
                                                         onClick={() => updateQty(ci.product_id, (ci.quantity ?? 0) - 1)}
-                                                        className="px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 text-slate-900"
+                                                        className="min-w-[44px] min-h-[44px] text-xl font-bold border border-gray-300 rounded-lg bg-white hover:bg-gray-50 active:bg-gray-200 active:scale-95 transition text-slate-900"
                                                     >
                                                         −
                                                     </button>
                                                     <input
                                                         type="number"
+                                                        inputMode="decimal"
                                                         step="0.01"
                                                         min="0.01"
                                                         value={ci.quantity ?? 0}
                                                         onChange={(e) => updateQty(ci.product_id, Number(e.target.value || 0))}
-                                                        className="w-20 border border-gray-300 rounded px-2 py-1 bg-white text-slate-900"
+                                                        className="w-20 min-h-[44px] border border-gray-300 rounded-lg px-2 py-1 text-center text-base bg-white text-slate-900"
                                                     />
                                                     <button
                                                         onClick={() => updateQty(ci.product_id, (ci.quantity ?? 0) + 1)}
-                                                        className="px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 text-slate-900"
+                                                        className="min-w-[44px] min-h-[44px] text-xl font-bold border border-gray-300 rounded-lg bg-white hover:bg-gray-50 active:bg-gray-200 active:scale-95 transition text-slate-900"
                                                     >
                                                         +
                                                     </button>
@@ -1046,11 +1055,12 @@ export default function KassaPage() {
                                                     <label className="text-sm text-slate-600">kg</label>
                                                     <input
                                                         type="number"
+                                                        inputMode="decimal"
                                                         min={0}
                                                         step="0.01"
                                                         value={ci.weight_kg ?? 0}
                                                         onChange={(e) => updateWeight(ci.product_id, Number(e.target.value || 0))}
-                                                        className="w-24 border border-gray-300 rounded px-2 py-1 bg-white text-slate-900"
+                                                        className="w-24 min-h-[44px] border border-gray-300 rounded-lg px-2 py-1 text-center text-base bg-white text-slate-900"
                                                     />
                                                 </div>
                                             )}
@@ -1113,9 +1123,10 @@ export default function KassaPage() {
 
             {/* Betalingsmodal */}
             {paymentModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closePaymentModal} />
-                    <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 max-w-md w-full mx-4">
+                <div className="fixed inset-0 z-50 overflow-y-auto">
+                    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={closePaymentModal} />
+                    <div className="flex min-h-full items-center justify-center p-4">
+                    <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 max-w-md w-full">
                         <h2 className="text-2xl font-bold mb-6 text-slate-900">Betaalmethode</h2>
 
                         {!paymentMethod ? (
@@ -1175,6 +1186,7 @@ export default function KassaPage() {
                                     </label>
                                     <input
                                         type="number"
+                                        inputMode="decimal"
                                         step="0.01"
                                         min={total}
                                         value={cashReceived}
@@ -1211,6 +1223,7 @@ export default function KassaPage() {
                                 </div>
                             </div>
                         )}
+                    </div>
                     </div>
                 </div>
             )}
