@@ -199,7 +199,10 @@ export default function VerkoopPage() {
     // Vaste kosten voor de geselecteerde periode (datum-correct opgehaald in loadData)
     const dagenInPeriode = calculateDaysInPeriod();
     const vasteKostenVoorPeriode = vasteKosten.reduce((sum, k) => sum + Number(k.bedrag), 0);
-    const nettoWinst = totals.winst - vasteKostenVoorPeriode;
+    // BTW (9%) af te dragen — indicator: prijzen zijn incl. BTW, dus 9/109 over de marge
+    // (verkoop-BTW minus inkoop-BTW = 9/109 x bruto winst). Officiële aangifte doet de boekhouder.
+    const btwAfTeDragen = totals.winst * (9 / 109);
+    const nettoWinst = totals.winst - btwAfTeDragen - vasteKostenVoorPeriode;
 
     useEffect(() => {
         loadData();
@@ -1019,7 +1022,7 @@ export default function VerkoopPage() {
                     </div>
 
                     {/* Totalen overzicht */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4 mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4 mb-8">
                         <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6">
                             <div className="text-sm font-medium text-blue-600 mb-1">Winkelverkopen</div>
                             <div className="text-2xl font-bold text-slate-900">€ {totals.winkel.toFixed(2)}</div>
@@ -1050,6 +1053,12 @@ export default function VerkoopPage() {
                             <div className="text-xs text-slate-500 mt-1">Verkoop - Inkoop</div>
                         </div>
 
+                        <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-amber-200 shadow-sm p-4 sm:p-6">
+                            <div className="text-sm font-medium text-amber-600 mb-1">BTW (9%)</div>
+                            <div className="text-2xl font-bold text-amber-700">€ {btwAfTeDragen.toFixed(2)}</div>
+                            <div className="text-xs text-slate-500 mt-1">af te dragen (schatting)</div>
+                        </div>
+
                         <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-purple-200 shadow-sm p-4 sm:p-6">
                             <div className="text-sm font-medium text-purple-600 mb-1">Vaste kosten</div>
                             <div className="text-2xl font-bold text-purple-700">€ {vasteKostenVoorPeriode.toFixed(2)}</div>
@@ -1060,7 +1069,7 @@ export default function VerkoopPage() {
                             <div className="text-sm font-medium text-white/90 mb-1">Netto winst</div>
                             <div className="text-2xl font-bold text-white">€ {nettoWinst.toFixed(2)}</div>
                             <div className="text-xs text-white/80 mt-1">
-                                Bruto - Vaste kosten
+                                Bruto − BTW − Vaste kosten
                             </div>
                         </div>
                     </div>
