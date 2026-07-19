@@ -19,10 +19,10 @@ type Periode = {
     geldig_vanaf: string; // YYYY-MM-DD
 };
 
-type Week = {
+type Dag = {
     id: string;
     kostenpost_id: string;
-    week_start: string; // YYYY-MM-DD (maandag)
+    datum: string; // YYYY-MM-DD
     uren: number;
     uurtarief: number;
 };
@@ -44,22 +44,9 @@ function formatDate(date: Date): string {
     return `${y}-${m}-${d}`;
 }
 
-function mondayOf(dateStr: string): string {
-    const [y, m, d] = dateStr.split("-").map(Number);
-    const dt = new Date(y, m - 1, d);
-    const dow = dt.getDay(); // 0 = zo
-    const back = dow === 0 ? 6 : dow - 1;
-    dt.setDate(dt.getDate() - back);
-    return formatDate(dt);
-}
-
-function weekLabel(weekStart: string): string {
-    const [y, m, d] = weekStart.split("-").map(Number);
-    const start = new Date(y, m - 1, d);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    const f = (dt: Date) => dt.toLocaleDateString("nl-NL", { day: "2-digit", month: "short" });
-    return `${f(start)} – ${f(end)}`;
+function dagLabel(datum: string): string {
+    const [y, m, d] = datum.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString("nl-NL", { weekday: "short", day: "2-digit", month: "short" });
 }
 
 function nlDate(dateStr: string): string {
@@ -74,7 +61,7 @@ function parseBedrag(v: string): number {
 export default function KostenPage() {
     const [posts, setPosts] = useState<Kostenpost[]>([]);
     const [periodes, setPeriodes] = useState<Periode[]>([]);
-    const [weken, setWeken] = useState<Week[]>([]);
+    const [dagen, setDagen] = useState<Dag[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [expanded, setExpanded] = useState<string | null>(null);
@@ -95,17 +82,17 @@ export default function KostenPage() {
         setLoading(true);
         setError(null);
         try {
-            const [postsRes, periodesRes, wekenRes] = await Promise.all([
+            const [postsRes, periodesRes, dagenRes] = await Promise.all([
                 supabase.from("kostenposten").select("*").eq("actief", true).order("sort_order").order("naam"),
                 supabase.from("kosten_periodes").select("*").order("geldig_vanaf", { ascending: false }),
-                supabase.from("kosten_weken").select("*").order("week_start", { ascending: false }),
+                supabase.from("kosten_dagen").select("*").order("datum", { ascending: false }),
             ]);
             if (postsRes.error) throw postsRes.error;
             if (periodesRes.error) throw periodesRes.error;
-            if (wekenRes.error) throw wekenRes.error;
+            if (dagenRes.error) throw dagenRes.error;
             setPosts((postsRes.data || []) as Kostenpost[]);
             setPeriodes((periodesRes.data || []) as Periode[]);
-            setWeken((wekenRes.data || []) as Week[]);
+            setDagen((dagenRes.data || []) as Dag[]);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Fout bij laden");
         } finally {
@@ -116,8 +103,8 @@ export default function KostenPage() {
     function periodesFor(postId: string) {
         return periodes.filter((p) => p.kostenpost_id === postId);
     }
-    function wekenFor(postId: string) {
-        return weken.filter((w) => w.kostenpost_id === postId);
+    function dagenFor(postId: string) {
+        return dagen.filter((d) => d.kostenpost_id === postId);
     }
 
     // Huidig geldend weekbedrag (vandaag) voor een vaste post
@@ -282,36 +269,36 @@ export default function KostenPage() {
         }
     }
 
-    // ── Weken (variabele kosten) ─────────────────────────────────────────────
-    const [weekStart, setWeekStart] = useState(mondayOf(formatDate(new Date())));
-    const [weekUren, setWeekUren] = useState("");
+    // ── Dagen (variabele kosten) ─────────────────────────────────────────────
+    const [dagDatum, setDagDatum] = useState(formatDate(new Date()));
+    const [dagUren, setDagUren] = useState("");
 
-    async function addWeek(post: Kostenpost) {
-        const uren = parseBedrag(weekUren);
+    async function addDag(post: Kostenpost) {
+        const uren = parseBedrag(dagUren);
         if (isNaN(uren)) return;
         try {
             const { error } = await supabase
-                .from("kosten_weken")
+                .from("kosten_dagen")
                 .upsert(
                     {
                         kostenpost_id: post.id,
-                        week_start: mondayOf(weekStart),
+                        datum: dagDatum,
                         uren,
                         uurtarief: post.uurtarief || 0,
                     },
-                    { onConflict: "kostenpost_id,week_start" }
+                    { onConflict: "kostenpost_id,datum" }
                 );
             if (error) throw error;
-            setWeekUren("");
+            setDagUren("");
             await loadAll();
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Fout bij opslaan week");
+            setError(err instanceof Error ? err.message : "Fout bij opslaan dag");
         }
     }
 
-    async function deleteWeek(id: string) {
+    async function deleteDag(id: string) {
         try {
-            const { error } = await supabase.from("kosten_weken").delete().eq("id", id);
+            const { error } = await supabase.from("kosten_dagen").delete().eq("id", id);
             if (error) throw error;
             await loadAll();
         } catch (err) {
@@ -374,7 +361,7 @@ export default function KostenPage() {
                 {posts.map((post) => {
                     const isOpen = expanded === post.id;
                     const postPeriodes = periodesFor(post.id);
-                    const postWeken = wekenFor(post.id);
+                    const postDagen = dagenFor(post.id);
                     const huidig = huidigBedrag(post.id);
 
                     return (
@@ -396,7 +383,7 @@ export default function KostenPage() {
                                             <div className="text-sm text-slate-500">
                                                 {post.type === "vast"
                                                     ? `Nu € ${huidig.toFixed(2)} / week`
-                                                    : `€ ${(post.uurtarief ?? 0).toFixed(2)} / uur · ${postWeken.length} week${postWeken.length !== 1 ? "en" : ""} ingevuld`}
+                                                    : `€ ${(post.uurtarief ?? 0).toFixed(2)} / uur · ${postDagen.length} dag${postDagen.length !== 1 ? "en" : ""} ingevuld`}
                                             </div>
                                         </div>
                                     </div>
@@ -448,22 +435,22 @@ export default function KostenPage() {
                                     ) : (
                                         <>
                                             <div className="flex justify-between items-center mb-3">
-                                                <div className="font-semibold text-slate-700">Uren per week</div>
+                                                <div className="font-semibold text-slate-700">Uren per dag</div>
                                                 <button onClick={() => updateTarief(post)} className="text-sm text-blue-600 hover:underline">
                                                     Uurtarief: € {(post.uurtarief ?? 0).toFixed(2)} (wijzigen)
                                                 </button>
                                             </div>
                                             <div className="space-y-2 mb-4">
-                                                {postWeken.length === 0 && (
-                                                    <p className="text-sm text-slate-500">Nog geen weken ingevuld.</p>
+                                                {postDagen.length === 0 && (
+                                                    <p className="text-sm text-slate-500">Nog geen dagen ingevuld.</p>
                                                 )}
-                                                {postWeken.map((w) => (
-                                                    <div key={w.id} className="flex justify-between items-center border border-gray-200 rounded-lg px-4 py-3">
+                                                {postDagen.map((d) => (
+                                                    <div key={d.id} className="flex justify-between items-center border border-gray-200 rounded-lg px-4 py-3">
                                                         <div>
-                                                            <div className="font-medium text-slate-900">{weekLabel(w.week_start)}</div>
-                                                            <div className="text-sm text-slate-500">{Number(w.uren)} uur × € {Number(w.uurtarief).toFixed(2)} = € {(Number(w.uren) * Number(w.uurtarief)).toFixed(2)}</div>
+                                                            <div className="font-medium text-slate-900">{dagLabel(d.datum)}</div>
+                                                            <div className="text-sm text-slate-500">{Number(d.uren)} uur × € {Number(d.uurtarief).toFixed(2)} = € {(Number(d.uren) * Number(d.uurtarief)).toFixed(2)}</div>
                                                         </div>
-                                                        <button onClick={() => deleteWeek(w.id)} className="px-3 py-2 min-h-[44px] rounded-lg text-sm text-red-600 hover:bg-red-50 active:bg-red-100 font-medium transition">
+                                                        <button onClick={() => deleteDag(d.id)} className="px-3 py-2 min-h-[44px] rounded-lg text-sm text-red-600 hover:bg-red-50 active:bg-red-100 font-medium transition">
                                                             Verwijderen
                                                         </button>
                                                     </div>
@@ -471,18 +458,17 @@ export default function KostenPage() {
                                             </div>
 
                                             <div className="border border-purple-200 rounded-lg p-4 bg-purple-50 mb-4">
-                                                <div className="text-sm font-semibold text-slate-700 mb-2">Week toevoegen / bijwerken</div>
+                                                <div className="text-sm font-semibold text-slate-700 mb-2">Dag toevoegen / bijwerken</div>
                                                 <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
                                                     <div className="w-full sm:w-auto">
-                                                        <label className="block text-xs text-slate-500 mb-1">Week (kies een dag)</label>
-                                                        <input type="date" value={weekStart} onChange={(e) => setWeekStart(e.target.value)} className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 text-slate-900" />
-                                                        <div className="text-xs text-slate-500 mt-1">Week: {weekLabel(mondayOf(weekStart))}</div>
+                                                        <label className="block text-xs text-slate-500 mb-1">Dag</label>
+                                                        <input type="date" value={dagDatum} onChange={(e) => setDagDatum(e.target.value)} className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 text-slate-900" />
                                                     </div>
                                                     <div className="w-full sm:w-[120px]">
                                                         <label className="block text-xs text-slate-500 mb-1">Uren</label>
-                                                        <input type="text" inputMode="decimal" value={weekUren} onChange={(e) => setWeekUren(e.target.value)} placeholder="0" className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 text-slate-900" />
+                                                        <input type="text" inputMode="decimal" value={dagUren} onChange={(e) => setDagUren(e.target.value)} placeholder="0" className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 text-slate-900" />
                                                     </div>
-                                                    <button onClick={() => addWeek(post)} className="px-4 py-2.5 min-h-[44px] rounded-lg bg-purple-500 text-white font-semibold hover:brightness-110 active:scale-95 transition">
+                                                    <button onClick={() => addDag(post)} className="px-4 py-2.5 min-h-[44px] rounded-lg bg-purple-500 text-white font-semibold hover:brightness-110 active:scale-95 transition">
                                                         Opslaan
                                                     </button>
                                                 </div>
