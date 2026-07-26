@@ -23,3 +23,22 @@ export async function deleteRowById(table: string, id: string, omschrijving: str
         );
     }
 }
+
+/**
+ * Past één rij aan op id en controleert net als hierboven of de wijziging ook
+ * echt is doorgevoerd, in plaats van stilzwijgend te verdampen.
+ */
+export async function updateRowById(
+    table: string,
+    id: string,
+    waarden: Record<string, unknown>,
+    omschrijving: string
+): Promise<void> {
+    const { data, error } = await supabase.from(table).update(waarden).eq("id", id).select("id");
+    if (error) throw error;
+    if (!data || data.length === 0) {
+        throw new Error(
+            `${omschrijving} is niet aangepast: de database gaf geen toestemming. Ververs de pagina en probeer het opnieuw.`
+        );
+    }
+}

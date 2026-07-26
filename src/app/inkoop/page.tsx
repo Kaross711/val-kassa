@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { supabase, deleteRowById } from "@/lib/supabase";
+import { supabase, deleteRowById, updateRowById } from "@/lib/supabase";
 
 // ---------- Types ----------
 type Product = {
@@ -62,6 +62,16 @@ function toLocalISOString(date: Date): string {
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}`;
 }
 
+// Gekozen dag (YYYY-MM-DD) omzetten naar een tijdstip om op te slaan. Voor
+// vandaag houden we de echte klok aan, voor een eerdere dag pakken we het
+// midden van de dag zodat de pakbon niet door tijdzoneverschil op de dag
+// ervoor of erna belandt.
+function timestampVoorDatum(datum: string): string {
+    const vandaag = formatDateForInput(new Date());
+    if (datum === vandaag) return toLocalISOString(new Date());
+    return `${datum}T12:00:00.000`;
+}
+
 type PurchaseOrderItem = {
     product_name: string;
     quantity: number;
@@ -90,6 +100,9 @@ export default function InkoopPage() {
     const [unmatchedItems, setUnmatchedItems] = useState<UnmatchedItem[]>([]);
     const [supplier, setSupplier] = useState("");
     const [purchaseNote, setPurchaseNote] = useState(""); // omschrijving: waarvoor is deze inkoop
+    // Datum van de inkoop zelf: standaard vandaag, maar aanpasbaar zodat een
+    // pakbon van een eerdere dag ook op die dag in de overzichten terechtkomt.
+    const [purchaseDate, setPurchaseDate] = useState<string>(formatDateForInput(new Date()));
     const [totalAmount, setTotalAmount] = useState<number>(0); // handmatig invoeren
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -100,6 +113,9 @@ export default function InkoopPage() {
     // Overzicht: per inkoop uitklapbare details (items), gecachet per order-id
     const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
     const [orderItemsCache, setOrderItemsCache] = useState<Record<string, PurchaseOrderItem[]>>({});
+    // Datum van de uitgeklapte pakbon, om die achteraf te kunnen corrigeren
+    const [editDate, setEditDate] = useState<string>("");
+    const [savingDate, setSavingDate] = useState(false);
     const [loadingOrderItems, setLoadingOrderItems] = useState<Record<string, boolean>>({});
 
     // Filter op periode voor het inkoop-overzicht
@@ -243,8 +259,39 @@ export default function InkoopPage() {
             setExpandedOrderId(null);
         } else {
             setExpandedOrderId(orderId);
+            const order = orders.find((o) => o.id === orderId);
+            setEditDate(order ? formatDateForInput(new Date(order.created_at)) : "");
             loadOrderItems(orderId);
         }
+    }
+
+    // Datum van een al opgeslagen pakbon corrigeren
+    async function updateOrderDate(orderId: string) {
+        if (!editDate) return;
+        setSavingDate(true);
+        setError(null);
+        try {
+            await updateRowById(
+                "purchase_orders",
+                orderId,
+                { created_at: timestampVoorDatum(editDate) },
+                "De datum"
+            );
+            // Door de nieuwe datum kan de pakbon buiten het gekozen periodefilter
+            // vallen en dus uit de lijst verdwijnen. Dat is geen verdwijntruc, dus
+            // zeggen we het erbij.
+            const { startDate, endDate } = getDateRange();
+            const nieuweTijd = timestampVoorDatum(editDate);
+            setNotification(
+                nieuweTijd < startDate || nieuweTijd > endDate
+                    ? "Datum aangepast — deze pakbon valt nu buiten het gekozen filter"
+                    : "Datum aangepast"
+            );
+            await loadOrders();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Onbekende fout");
+        }
+        setSavingDate(false);
     }
 
     async function deleteOrder(orderId: string) {
@@ -561,6 +608,7 @@ export default function InkoopPage() {
                     supplier: supplier || null,
                     total_amount: totalAmount,
                     note: purchaseNote.trim() || null,
+                    created_at: timestampVoorDatum(purchaseDate),
                 })
                 .select("id")
                 .single<{ id: string }>();
@@ -595,6 +643,7 @@ export default function InkoopPage() {
             setSupplier("");
             setPurchaseNote("");
             setTotalAmount(0);
+            setPurchaseDate(formatDateForInput(new Date()));
             setUploadedImage(null);
 
             loadOrders();
@@ -841,6 +890,21 @@ export default function InkoopPage() {
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    Datum van de inkoop
+                                </label>
+                                <input
+                                    type="date"
+                                    value={purchaseDate}
+                                    onChange={(e) => setPurchaseDate(e.target.value)}
+                                    className="w-full min-h-[44px] border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-slate-900"
+                                />
+                                <p className="mt-1 text-xs text-slate-500">
+                                    Staat standaard op vandaag. Zet hem terug als je een pakbon van een eerdere dag invoert.
+                                </p>
+                            </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Leverancier (optioneel)</label>
                                 <input type="text" value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="bijv. Fresh Food Centraal" className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-400" />
@@ -1103,7 +1167,32 @@ export default function InkoopPage() {
                                                     </div>
                                                 )}
 
-                                                <div className="flex justify-end mt-3">
+                                                <div className="flex flex-wrap items-end justify-between gap-3 mt-3">
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                                                            Datum van deze inkoop
+                                                        </label>
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="date"
+                                                                value={editDate}
+                                                                onChange={(e) => setEditDate(e.target.value)}
+                                                                className="min-h-[44px] border border-gray-300 rounded-lg px-3 py-2 bg-white text-slate-900 text-sm"
+                                                            />
+                                                            <button
+                                                                onClick={() => updateOrderDate(order.id)}
+                                                                disabled={
+                                                                    savingDate ||
+                                                                    !editDate ||
+                                                                    editDate === formatDateForInput(new Date(order.created_at))
+                                                                }
+                                                                className="px-3 py-2 min-h-[44px] rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition text-sm font-medium"
+                                                            >
+                                                                {savingDate ? "Opslaan…" : "Datum opslaan"}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
                                                     <button
                                                         onClick={() => deleteOrder(order.id)}
                                                         className="px-3 py-1.5 rounded border border-red-300 text-red-600 hover:bg-red-50 transition text-sm font-medium"
