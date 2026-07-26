@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, deleteRowById } from "@/lib/supabase";
 
 // ---------- Types ----------
 type Product = {
@@ -254,12 +254,7 @@ export default function InkoopPage() {
         if (!confirmed) return;
 
         try {
-            const { error: deleteError } = await supabase
-                .from("purchase_orders")
-                .delete()
-                .eq("id", orderId);
-
-            if (deleteError) throw deleteError;
+            await deleteRowById("purchase_orders", orderId, "De pakbon");
 
             setNotification("Pakbon succesvol verwijderd");
             setExpandedOrderId(null);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, deleteRowById } from "@/lib/supabase";
 
 type SaleType = "WINKEL" | "BESTELLING" | "BEDRIJF";
 
@@ -567,12 +567,7 @@ export default function VerkoopPage() {
 
             if (itemsError) throw itemsError;
 
-            const { error: receiptError } = await supabase
-                .from("receipts")
-                .delete()
-                .eq("id", receiptId);
-
-            if (receiptError) throw receiptError;
+            await deleteRowById("receipts", receiptId, "De verkoop");
 
             await loadData();
             setExpandedReceipt(null);

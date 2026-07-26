@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, deleteRowById } from "@/lib/supabase";
 
 type Kostenpost = {
     id: string;
@@ -211,8 +211,7 @@ export default function KostenPage() {
     async function deletePost(post: Kostenpost) {
         if (!confirm(`"${post.naam}" volledig verwijderen? Dit verwijdert ook alle historie van deze post uit alle periodes. Gebruik "Stopzetten" als je de post alleen vanaf een datum wilt beëindigen.`)) return;
         try {
-            const { error } = await supabase.from("kostenposten").delete().eq("id", post.id);
-            if (error) throw error;
+            await deleteRowById("kostenposten", post.id, `"${post.naam}"`);
             await loadAll();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Fout bij verwijderen");
@@ -261,8 +260,7 @@ export default function KostenPage() {
 
     async function deletePeriode(id: string) {
         try {
-            const { error } = await supabase.from("kosten_periodes").delete().eq("id", id);
-            if (error) throw error;
+            await deleteRowById("kosten_periodes", id, "De periode");
             await loadAll();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Fout bij verwijderen");
@@ -298,8 +296,7 @@ export default function KostenPage() {
 
     async function deleteDag(id: string) {
         try {
-            const { error } = await supabase.from("kosten_dagen").delete().eq("id", id);
-            if (error) throw error;
+            await deleteRowById("kosten_dagen", id, "De dag");
             await loadAll();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Fout bij verwijderen");
