@@ -21,7 +21,8 @@ export default function LoginPage() {
         });
 
         if (res.ok) {
-            router.push("/");
+            const data = (await res.json()) as { start?: string };
+            router.push(data.start ?? "/");
             router.refresh();
         } else {
             setError(true);

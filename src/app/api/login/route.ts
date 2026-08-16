@@ -1,25 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const SITE_PASSWORD = process.env.SITE_PASSWORD;
+import {
+    SESSIE_COOKIE,
+    SESSIE_GELDIGHEID_SECONDEN,
+    maakSessieCookie,
+    rolBijWachtwoord,
+    startPagina,
+} from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
-    if (!SITE_PASSWORD) {
+    if (!process.env.SITE_PASSWORD) {
         console.error("SITE_PASSWORD env var ontbreekt — login geweigerd.");
         return NextResponse.json({ success: false }, { status: 500 });
     }
 
     const { password } = await req.json();
 
-    if (password === SITE_PASSWORD) {
-        const res = NextResponse.json({ success: true });
-        res.cookies.set("auth", "true", {
-            httpOnly: true,
-            secure: true,
-            sameSite: "strict",
-            maxAge: 60 * 60 * 24 * 30, // 30 dagen
-        });
-        return res;
+    const rol = rolBijWachtwoord(password);
+    if (!rol) {
+        return NextResponse.json({ success: false }, { status: 401 });
     }
 
-    return NextResponse.json({ success: false }, { status: 401 });
+    const sessie = await maakSessieCookie(rol);
+    if (!sessie) {
+        console.error("Sessiecookie kon niet worden ondertekend.");
+        return NextResponse.json({ success: false }, { status: 500 });
+    }
+
+    const res = NextResponse.json({ success: true, rol, start: startPagina(rol) });
+    res.cookies.set(SESSIE_COOKIE, sessie, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+        maxAge: SESSIE_GELDIGHEID_SECONDEN,
+    });
+
+    // Het oude ongetekende auth-cookie opruimen; dat gaf toegang tot alles.
+    res.cookies.delete("auth");
+
+    return res;
 }
