@@ -1,0 +1,1236 @@
+"use client";
+
+import { useEffect, useMemo, useState, useRef } from "react";
+import { supabase } from "@/lib/supabase";
+
+type Unit = "KILO" | "STUK";
+
+// Nieuw: type voor soort verkoop
+type SaleType = "WINKEL" | "BESTELLING" | "BEDRIJF";
+
+type Product = {
+    id: string;
+    name: string;
+    unit: Unit;
+    price: number | null;
+};
+
+type ArchivedProduct = {
+    id: string;
+    name: string;
+    unit: Unit;
+};
+
+type CartItem = {
+    product_id: string;
+    name: string;
+    unit: Unit;
+    unit_price: number;
+    quantity: number | null;
+    weight_kg: number | null;
+    line_total: number;
+};
+
+// localStorage key zodat de winkelwagen bewaard blijft bij per ongeluk weg-navigeren
+const CART_STORAGE_KEY = "val-kassa-winkelwagen";
+
+type StoredCart = {
+    cart: CartItem[];
+    saleType: SaleType;
+    note: string;
+    voucherApplied: boolean;
+};
+
+function toPrice(price: number | null): number {
+    return price ?? 0;
+}
+
+function round2(n: number) {
+    return Math.round(n * 100) / 100;
+}
+
+function explainSupabaseError(err: unknown): string {
+    if (err && typeof err === 'object' && 'message' in err) {
+        const error = err as { message?: string; details?: string; hint?: string; code?: string };
+        const parts = [
+            error.message,
+            error.details,
+            error.hint,
+            error.code ? `code: ${error.code}` : null,
+        ].filter(Boolean);
+        return parts.join(" — ");
+    }
+    try {
+        return JSON.stringify(err);
+    } catch {
+        return String(err);
+    }
+}
+
+export default function KassaScherm({ alleenWinkel }: { alleenWinkel: boolean }) {
+    const [products, setProducts] = useState<Product[]>([]);
+    const [archivedProducts, setArchivedProducts] = useState<ArchivedProduct[]>([]);
+    const [showArchived, setShowArchived] = useState(false);
+    const [q, setQ] = useState("");
+    const [cart, setCart] = useState<CartItem[]>([]);
+    const [note, setNote] = useState("");
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [open, setOpen] = useState(false);
+    const [notification, setNotification] = useState<string | null>(null);
+
+    // Nieuw: type verkoop selectie
+    const [saleType, setSaleType] = useState<SaleType>("WINKEL");
+
+    // Modal state voor winkelwagen
+    const [modalOpen, setModalOpen] = useState(false);
+    const [modalProduct, setModalProduct] = useState<Product | null>(null);
+    const [modalValue, setModalValue] = useState("1");
+
+    // Modal state voor product beheer
+    const [editMode, setEditMode] = useState(false);
+    const [editPrice, setEditPrice] = useState("");
+
+    // Nieuw product modal
+    const [addProductOpen, setAddProductOpen] = useState(false);
+    const [newProductName, setNewProductName] = useState("");
+    const [newProductUnit, setNewProductUnit] = useState<Unit>("STUK");
+    const [newProductPrice, setNewProductPrice] = useState("");
+
+    // Voucher state
+    const [voucherApplied, setVoucherApplied] = useState(false);
+
+    // Betalingsmodal state
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<"PIN" | "CONTANT" | null>(null);
+    const [cashReceived, setCashReceived] = useState("");
+    const [changeAmount, setChangeAmount] = useState(0);
+
+    // Ref voor auto-focus op input
+    const modalInputRef = useRef<HTMLInputElement>(null);
+
+    // Houdt bij of de winkelwagen uit localStorage is geladen, zodat we
+    // de opslag niet overschrijven met de lege begin-state.
+    const [hydrated, setHydrated] = useState(false);
+
+    // ---------- Winkelwagen bewaren (localStorage) ----------
+    // Laad bewaarde winkelwagen bij het openen van de pagina
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem(CART_STORAGE_KEY);
+            if (stored) {
+                const parsed = JSON.parse(stored) as StoredCart;
+                if (Array.isArray(parsed.cart)) setCart(parsed.cart);
+                if (parsed.saleType && !alleenWinkel) setSaleType(parsed.saleType);
+                if (typeof parsed.note === "string") setNote(parsed.note);
+                if (typeof parsed.voucherApplied === "boolean") setVoucherApplied(parsed.voucherApplied);
+            }
+        } catch {
+            // Negeer corrupte opslag
+        }
+        setHydrated(true);
+    }, [alleenWinkel]);
+
+    // Bewaar de winkelwagen bij elke wijziging (pas nadat we geladen hebben)
+    useEffect(() => {
+        if (!hydrated) return;
+        try {
+            const toStore: StoredCart = { cart, saleType, note, voucherApplied };
+            localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(toStore));
+        } catch {
+            // Negeer opslagfouten (bijv. volle storage / private mode)
+        }
+    }, [cart, saleType, note, voucherApplied, hydrated]);
+
+    // ---------- Data loading ----------
+    async function loadProducts() {
+        const { data, error } = await supabase
+            .from("products_with_price")
+            .select("id,name,unit,price")
+            .order("name");
+
+        if (error) {
+            setError(error.message);
+            return;
+        }
+
+        const productsData = (data ?? []) as Product[];
+        setProducts(productsData);
+
+        // Verborgen producten ophalen
+        const { data: hidden, error: hiddenErr } = await supabase
+            .from("products")
+            .select("id,name,unit")
+            .eq("is_active", false)
+            .order("name");
+
+        if (hiddenErr) {
+            console.error("Supabase fout (verborgen laden):", hiddenErr);
+        } else {
+            setArchivedProducts((hidden ?? []) as ArchivedProduct[]);
+        }
+    }
+
+    useEffect(() => {
+        loadProducts();
+    }, []);
+
+    useEffect(() => {
+        if (open) document.body.classList.add("overflow-hidden");
+        else document.body.classList.remove("overflow-hidden");
+        const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+        window.addEventListener("keydown", onKey);
+        return () => {
+            document.body.classList.remove("overflow-hidden");
+            window.removeEventListener("keydown", onKey);
+        };
+    }, [open]);
+
+    useEffect(() => {
+        if (modalOpen) {
+            document.body.classList.add("overflow-hidden");
+            // Auto-focus op input veld na kleine delay (voor animatie)
+            setTimeout(() => {
+                if (modalInputRef.current && !editMode) {
+                    modalInputRef.current.focus();
+                    modalInputRef.current.select(); // Selecteer de inhoud direct
+                }
+            }, 100);
+
+            const onKey = (e: KeyboardEvent) => {
+                if (e.key === "Escape") {
+                    closeModal();
+                }
+                if (e.key === "Enter" && !editMode) {
+                    confirmModal();
+                }
+            };
+            window.addEventListener("keydown", onKey);
+            return () => {
+                document.body.classList.remove("overflow-hidden");
+                window.removeEventListener("keydown", onKey);
+            };
+        }
+    }, [modalOpen, editMode]);
+
+    useEffect(() => {
+        if (addProductOpen) {
+            document.body.classList.add("overflow-hidden");
+            const onKey = (e: KeyboardEvent) => {
+                if (e.key === "Escape") {
+                    closeAddProductModal();
+                }
+            };
+            window.addEventListener("keydown", onKey);
+            return () => {
+                document.body.classList.remove("overflow-hidden");
+                window.removeEventListener("keydown", onKey);
+            };
+        }
+    }, [addProductOpen]);
+
+    // ---------- Product modal functies ----------
+    function openModal(p: Product) {
+        setModalProduct(p);
+        setModalOpen(true);
+        setEditMode(false);
+        setModalValue("1");
+    }
+
+    function closeModal() {
+        setModalOpen(false);
+        setModalProduct(null);
+        setModalValue("1");
+        setEditMode(false);
+        setEditPrice("");
+    }
+
+    function confirmModal() {
+        if (!modalProduct) return;
+
+        const value = Number(String(modalValue).replace(",", "."));
+        if (isNaN(value) || value <= 0) {
+            setNotification("Ongeldig aantal");
+            return;
+        }
+
+        const p = modalProduct;
+
+        if (p.unit === "STUK") {
+            const quantity = Math.round(value * 100) / 100;
+            const idx = cart.findIndex(
+                (ci) => ci.product_id === p.id && ci.unit === "STUK" && ci.unit_price === p.price
+            );
+            if (idx >= 0) {
+                const next = [...cart];
+                const cur = next[idx];
+                const newQty = (cur.quantity ?? 0) + quantity;
+                next[idx] = { ...cur, quantity: newQty, line_total: round2(newQty * cur.unit_price) };
+                setCart(next);
+            } else {
+                setCart((prev) => [
+                    ...prev,
+                    {
+                        product_id: p.id,
+                        name: p.name,
+                        unit: "STUK",
+                        unit_price: toPrice(p.price),
+                        quantity: quantity,
+                        weight_kg: null,
+                        line_total: round2(toPrice(p.price) * quantity),
+                    },
+                ]);
+            }
+        } else {
+            setCart((prev) => [
+                ...prev,
+                {
+                    product_id: p.id,
+                    name: p.name,
+                    unit: "KILO",
+                    unit_price: toPrice(p.price),
+                    quantity: null,
+                    weight_kg: value,
+                    line_total: round2(toPrice(p.price) * value),
+                },
+            ]);
+        }
+
+        closeModal();
+    }
+
+    function enterEditMode() {
+        if (!modalProduct) return;
+        setEditMode(true);
+        setEditPrice(modalProduct.price?.toString() ?? "");
+    }
+
+    async function saveProductChanges() {
+        if (!modalProduct) return;
+        setSaving(true);
+        setError(null);
+
+        const priceVal = parseFloat(editPrice);
+
+        if (isNaN(priceVal)) {
+            setError("Prijs moet een getal zijn.");
+            setSaving(false);
+            return;
+        }
+
+        // Check of er al een prijs bestaat voor dit product
+        const { data: existingPrice } = await supabase
+            .from("prices")
+            .select("id, product_id, price")
+            .eq("product_id", modalProduct.id)
+            .order("valid_from", { ascending: false })
+            .limit(1)
+            .single();
+
+        if (existingPrice) {
+            // Update bestaande prijs
+            const { error: priceErr } = await supabase
+                .from("prices")
+                .update({ price: priceVal })
+                .eq("id", existingPrice.id);
+
+            if (priceErr) {
+                setError("Fout prijs opslaan: " + explainSupabaseError(priceErr));
+                setSaving(false);
+                return;
+            }
+        } else {
+            // Maak nieuwe prijs aan
+            const { error: priceErr } = await supabase
+                .from("prices")
+                .insert({
+                    product_id: modalProduct.id,
+                    price: priceVal,
+                    valid_from: new Date().toISOString(),
+                });
+
+            if (priceErr) {
+                setError("Fout prijs opslaan: " + explainSupabaseError(priceErr));
+                setSaving(false);
+                return;
+            }
+        }
+
+        await loadProducts();
+        setSaving(false);
+        setEditMode(false);
+        closeModal();
+        showNotification("Product bijgewerkt!");
+    }
+
+    async function deleteProduct() {
+        if (!modalProduct) return;
+        setSaving(true);
+        setError(null);
+
+        const { error } = await supabase
+            .from("products")
+            .update({ is_active: false })
+            .eq("id", modalProduct.id);
+
+        if (error) {
+            setError("Fout product verbergen: " + explainSupabaseError(error));
+            setSaving(false);
+            return;
+        }
+
+        await loadProducts();
+        setSaving(false);
+        closeModal();
+        showNotification("Product verborgen!");
+    }
+
+    // ---------- Nieuw product modal functies ----------
+    function openAddProductModal() {
+        setAddProductOpen(true);
+        setNewProductName("");
+        setNewProductUnit("STUK");
+        setNewProductPrice("");
+    }
+
+    function closeAddProductModal() {
+        setAddProductOpen(false);
+        setNewProductName("");
+        setNewProductUnit("STUK");
+        setNewProductPrice("");
+    }
+
+    async function createNewProduct() {
+        setSaving(true);
+        setError(null);
+
+        const name = newProductName.trim();
+        if (!name) {
+            setError("Naam is verplicht.");
+            setSaving(false);
+            return;
+        }
+
+        const price = parseFloat(newProductPrice);
+
+        if (isNaN(price)) {
+            setError("Prijs moet een getal zijn.");
+            setSaving(false);
+            return;
+        }
+
+        const { data: productData, error: productErr } = await supabase
+            .from("products")
+            .insert({
+                name,
+                unit: newProductUnit,
+                is_active: true,
+            })
+            .select("id")
+            .single();
+
+        if (productErr) {
+            setError("Fout product aanmaken: " + explainSupabaseError(productErr));
+            setSaving(false);
+            return;
+        }
+
+        const productId = productData.id;
+
+        // Voeg prijs toe met valid_from
+        const { error: priceErr } = await supabase.from("prices").insert({
+            product_id: productId,
+            price,
+            valid_from: new Date().toISOString(),
+        });
+
+        if (priceErr) {
+            setError("Fout prijs opslaan: " + explainSupabaseError(priceErr));
+            setSaving(false);
+            return;
+        }
+
+        await loadProducts();
+        setSaving(false);
+        closeAddProductModal();
+        showNotification("Product toegevoegd!");
+    }
+
+    async function restoreProduct(productId: string) {
+        const { error } = await supabase
+            .from("products")
+            .update({ is_active: true })
+            .eq("id", productId);
+
+        if (error) {
+            setError("Fout product terugzetten: " + explainSupabaseError(error));
+            return;
+        }
+
+        await loadProducts();
+        showNotification("Product teruggezet!");
+    }
+
+    // ---------- Winkelwagen acties ----------
+    function removeItem(productId: string) {
+        setCart(cart.filter((c) => c.product_id !== productId));
+    }
+
+    function updateQty(product_id: string, qty: number) {
+        setCart((prev) => {
+            const nextQty = Math.max(0, Number.isFinite(qty) ? Math.round(qty * 100) / 100 : 0);
+            if (nextQty <= 0) {
+                return prev.filter((ci) => !(ci.product_id === product_id && ci.unit === "STUK"));
+            }
+            return prev.map((ci) =>
+                ci.product_id === product_id && ci.unit === "STUK"
+                    ? { ...ci, quantity: nextQty, line_total: round2(ci.unit_price * nextQty) }
+                    : ci
+            );
+        });
+    }
+
+    function updateWeight(product_id: string, w: number) {
+        setCart((prev) => {
+            const weight = Number.isFinite(w) ? w : 0;
+            if (weight <= 0) {
+                return prev.filter((ci) => !(ci.product_id === product_id && ci.unit === "KILO"));
+            }
+            return prev.map((ci) =>
+                ci.product_id === product_id && ci.unit === "KILO"
+                    ? {
+                        ...ci,
+                        weight_kg: weight,
+                        line_total: round2(ci.unit_price * weight),
+                    }
+                    : ci
+            );
+        });
+    }
+
+    // ---------- Betalingsfuncties ----------
+    // Rond bedrag af naar dichtstbijzijnde 5 cent
+    function roundToNickle(amount: number): number {
+        return Math.round(amount / 0.05) * 0.05;
+    }
+
+    // Open betalingsmodal
+    function openPaymentModal() {
+        if (cart.length === 0) return;
+        setPaymentModalOpen(true);
+        setPaymentMethod(null);
+        setCashReceived("");
+        setChangeAmount(0);
+    }
+
+    // Sluit betalingsmodal
+    function closePaymentModal() {
+        setPaymentModalOpen(false);
+        setPaymentMethod(null);
+        setCashReceived("");
+        setChangeAmount(0);
+    }
+
+    // Bereken wisselgeld wanneer contant bedrag verandert
+    function handleCashReceivedChange(value: string) {
+        setCashReceived(value);
+        const received = parseFloat(value);
+        if (!isNaN(received) && received > 0) {
+            const change = received - total;
+            setChangeAmount(roundToNickle(change));
+        } else {
+            setChangeAmount(0);
+        }
+    }
+
+    // ---------- Afrekenen - AANGEPAST MET SALE_TYPE EN BETALING ----------
+    async function checkout() {
+        // 'saving' check voorkomt dubbele bonnen bij twee keer snel tikken
+        if (cart.length === 0 || saving) return;
+
+        // Validatie bij contante betaling
+        if (paymentMethod === "CONTANT") {
+            const received = parseFloat(cashReceived);
+            if (isNaN(received) || received < total) {
+                setError("Ontvangen bedrag moet minimaal het totaalbedrag zijn.");
+                return;
+            }
+        }
+
+        setSaving(true);
+        setError(null);
+
+        try {
+            const payload = cart.map((ci) => ({
+                product_id: ci.product_id,
+                unit: ci.unit,
+                quantity: ci.unit === "STUK" ? ci.quantity : null,
+                weight_kg: ci.unit === "KILO" ? ci.weight_kg : null,
+                unit_price: ci.unit_price,
+                line_total: ci.line_total,
+            }));
+
+            // Gebruik de bestaande RPC functie maar voeg sale_type toe
+            const { data, error: rpcError } = await supabase
+                .rpc("checkout_create", {
+                    _items: payload,
+                    _note: note || null,
+                    _paid_at: new Date().toISOString(),
+                    _sale_type: saleType,
+                });
+
+            if (rpcError) {
+                throw rpcError;
+            }
+
+            setCart([]);
+            setNote("");
+            setVoucherApplied(false);
+            setOpen(false);
+            closePaymentModal();
+
+            // Type-specifieke melding
+            const typeLabels: Record<SaleType, string> = {
+                WINKEL: "Winkelverkoop",
+                BESTELLING: "Bestelling",
+                BEDRIJF: "Bedrijfsverkoop"
+            };
+            showNotification(`${typeLabels[saleType]} afgerond! Bonnr: ${data}`);
+
+            await loadProducts();
+        } catch (err) {
+            console.error("Checkout RPC error:", err);
+            setError(explainSupabaseError(err));
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    function showNotification(msg: string) {
+        setNotification(msg);
+        setTimeout(() => setNotification(null), 3000);
+    }
+
+    // ---------- Filtering ----------
+    const filtered = useMemo(() => {
+        const term = q.toLowerCase().trim();
+        if (!term) return products;
+        return products.filter((p) => p.name.toLowerCase().includes(term));
+    }, [products, q]);
+
+    const subtotal = useMemo(() => {
+        return cart.reduce((sum, c) => sum + c.line_total, 0);
+    }, [cart]);
+
+    const total = useMemo(() => {
+        if (voucherApplied) {
+            return Math.max(0, subtotal - 5);
+        }
+        return subtotal;
+    }, [subtotal, voucherApplied]);
+
+    // ---------- Render ----------
+    return (
+        <div className="min-h-screen pb-24">
+            {/* Notificatie */}
+            {notification && (
+                <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg">
+                    {notification}
+                </div>
+            )}
+
+            {/* Error */}
+            {error && (
+                <div className="fixed top-4 left-4 z-50 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg max-w-md">
+                    {error}
+                    <button onClick={() => setError(null)} className="ml-4 underline">
+                        Sluiten
+                    </button>
+                </div>
+            )}
+
+            {/* Header */}
+            <div className="bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-sm sticky top-0 z-40">
+                <div className="mx-auto max-w-7xl px-3 py-3">
+                    <h1 className="text-xl md:text-2xl font-bold text-slate-900 mb-3">Kassa</h1>
+
+                    {/* Type selectie; een medewerker ziet alleen winkelverkoop */}
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                        <button
+                            onClick={() => setSaleType("WINKEL")}
+                            className={`px-3 sm:px-4 py-2.5 min-h-[44px] rounded-lg font-semibold transition text-sm ${
+                                saleType === "WINKEL"
+                                    ? "bg-blue-500 text-white shadow-md"
+                                    : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
+                            }`}
+                        >
+                            Winkelverkoop
+                        </button>
+                        {!alleenWinkel && (
+                        <>
+                        <button
+                            onClick={() => setSaleType("BESTELLING")}
+                            className={`px-3 sm:px-4 py-2.5 min-h-[44px] rounded-lg font-semibold transition text-sm ${
+                                saleType === "BESTELLING"
+                                    ? "bg-orange-500 text-white shadow-md"
+                                    : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
+                            }`}
+                        >
+                            Bestelling
+                        </button>
+                        <button
+                            onClick={() => setSaleType("BEDRIJF")}
+                            className={`px-3 sm:px-4 py-2.5 min-h-[44px] rounded-lg font-semibold transition text-sm ${
+                                saleType === "BEDRIJF"
+                                    ? "bg-green-500 text-white shadow-md"
+                                    : "bg-white text-slate-700 border border-gray-300 hover:bg-gray-50"
+                            }`}
+                        >
+                            Bedrijfsverkoop
+                        </button>
+                        </>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                            type="text"
+                            inputMode="search"
+                            placeholder="Zoek product…"
+                            className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 min-h-[44px] bg-white text-slate-900 placeholder:text-slate-400 text-base"
+                            value={q}
+                            onChange={(e) => setQ(e.target.value)}
+                        />
+                        <div className="flex gap-2">
+                            <button
+                                onClick={openAddProductModal}
+                                className="flex-1 sm:flex-none px-3 py-2.5 min-h-[44px] rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 active:scale-95 transition shadow-md text-sm whitespace-nowrap"
+                            >
+                                + Product
+                            </button>
+                            <button
+                                onClick={() => setShowArchived(!showArchived)}
+                                className="flex-1 sm:flex-none px-3 py-2.5 min-h-[44px] rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 active:bg-gray-100 transition text-sm whitespace-nowrap"
+                            >
+                                Archief
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Producten grid */}
+            <div className="mx-auto max-w-7xl px-3 py-4">
+                {showArchived ? (
+                    <div>
+                        <h2 className="text-lg font-bold mb-3 text-slate-900">Verborgen producten</h2>
+                        {archivedProducts.length === 0 ? (
+                            <p className="text-slate-600 text-sm">Geen verborgen producten.</p>
+                        ) : (
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                                {archivedProducts.map((p) => (
+                                    <div
+                                        key={p.id}
+                                        className="rounded-lg border border-gray-200 bg-white/90 backdrop-blur-sm p-2 shadow-sm hover:shadow-md transition"
+                                    >
+                                        <div className="font-semibold text-xs text-slate-900 mb-1.5">{p.name}</div>
+                                        <button
+                                            onClick={() => restoreProduct(p.id)}
+                                            className="w-full mt-1 px-2 py-2 min-h-[44px] rounded-md bg-green-500 text-white text-xs font-semibold hover:brightness-110 active:scale-95 transition"
+                                        >
+                                            Terugzetten
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <>
+                        {filtered.length === 0 ? (
+                            <p className="text-slate-600 text-sm">Geen producten gevonden.</p>
+                        ) : (
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                                {filtered.map((p) => {
+                                    const hasPrice = p.price !== null && p.price !== undefined;
+
+                                    return (
+                                        <button
+                                            key={p.id}
+                                            type="button"
+                                            onClick={() => openModal(p)}
+                                            className="rounded-lg border-2 border-gray-200 bg-white/90 backdrop-blur-sm p-2 shadow-sm active:shadow-lg active:border-blue-400 transition cursor-pointer active:scale-95 text-left"
+                                        >
+                                            <div className="font-bold text-[11px] text-slate-900 mb-1 leading-tight break-words min-h-[2rem] flex items-center">
+                                                {p.name}
+                                            </div>
+                                            <div className="text-xs font-bold text-blue-600 mb-0.5">
+                                                {hasPrice ? `€ ${p.price!.toFixed(2)}` : "€ -.--"}
+                                            </div>
+                                            <div className="text-[10px] text-slate-500">
+                                                per {p.unit}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {/* Modals en andere UI elementen blijven hetzelfde... */}
+            {/* (Te lang om hier volledig te tonen, maar zijn identiek aan de originele code) */}
+
+            {/* Nieuw product modal */}
+            {addProductOpen && (
+                <div className="fixed inset-0 z-50 overflow-y-auto">
+                    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={closeAddProductModal} />
+                    <div className="flex min-h-full items-center justify-center p-4">
+                    <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 max-w-md w-full">
+                        <h2 className="text-xl font-bold mb-4 text-slate-900">Nieuw product</h2>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-slate-700">
+                                    Productnaam
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newProductName}
+                                    onChange={(e) => setNewProductName(e.target.value)}
+                                    className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                    placeholder="bijv. Appels"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-slate-700">
+                                    Eenheid
+                                </label>
+                                <select
+                                    value={newProductUnit}
+                                    onChange={(e) => setNewProductUnit(e.target.value as Unit)}
+                                    className="w-full border border-gray-300 rounded px-3 py-2 text-slate-900"
+                                >
+                                    <option value="STUK">STUK</option>
+                                    <option value="KILO">KILO</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-slate-700">
+                                    Prijs per {newProductUnit === "KILO" ? "kilo" : "stuk"} (€)
+                                </label>
+                                <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="0.01"
+                                    value={newProductPrice}
+                                    onChange={(e) => setNewProductPrice(e.target.value)}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base text-slate-900"
+                                    placeholder="bijv. 2.50"
+                                />
+                            </div>
+
+                        </div>
+
+                        <div className="flex gap-3 mt-6">
+                            <button
+                                onClick={closeAddProductModal}
+                                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                            >
+                                Annuleren
+                            </button>
+                            <button
+                                onClick={createNewProduct}
+                                disabled={saving}
+                                className="flex-1 px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 transition shadow-md disabled:opacity-50"
+                            >
+                                {saving ? "Opslaan..." : "Toevoegen"}
+                            </button>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Product modal */}
+            {modalOpen && modalProduct && (
+                <div className="fixed inset-0 z-50 overflow-y-auto">
+                    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={closeModal} />
+                    <div className="flex min-h-full items-center justify-center p-4">
+                    <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 max-w-md w-full">
+                        {!editMode ? (
+                            <>
+                                <h2 className="text-2xl font-bold mb-3 text-slate-900">{modalProduct.name}</h2>
+                                <div className="text-lg text-slate-600 mb-2">
+                                    € {toPrice(modalProduct.price).toFixed(2)} / {modalProduct.unit}
+                                </div>
+                                <label className="block text-lg font-semibold mb-3 text-slate-900">
+                                    Aantal {modalProduct.unit === "KILO" ? "(kg)" : "(stuks)"}
+                                </label>
+                                <input
+                                    ref={modalInputRef}
+                                    type="number"
+                                    inputMode="decimal"
+                                    step={modalProduct.unit === "KILO" ? "0.01" : "1"}
+                                    min="0.01"
+                                    value={modalValue}
+                                    onChange={(e) => setModalValue(e.target.value)}
+                                    className="w-full border-2 border-blue-400 rounded-xl px-4 py-4 mb-6 text-2xl font-bold text-center text-slate-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-200 transition"
+                                />
+
+                                <div className="space-y-3">
+                                    {/* Extra grote Toevoegen knop */}
+                                    <button
+                                        onClick={confirmModal}
+                                        className="w-full px-6 py-5 text-xl rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-bold hover:brightness-110 transition shadow-lg"
+                                    >
+                                        ✓ Toevoegen aan winkelwagen
+                                    </button>
+
+                                    {/* Annuleren knop */}
+                                    <button
+                                        onClick={closeModal}
+                                        className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                    >
+                                        Annuleren
+                                    </button>
+                                </div>
+
+                                {/* Bewerk product klein en onderaan */}
+                                <button
+                                    onClick={enterEditMode}
+                                    className="w-full mt-6 px-3 py-2 rounded-lg border border-gray-200 text-slate-500 text-sm hover:bg-gray-50 transition"
+                                >
+                                    ⚙️ Bewerk product
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <h2 className="text-xl font-bold mb-4 text-slate-900">Bewerk product</h2>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-slate-700">
+                                            Prijs per {modalProduct.unit === "KILO" ? "kilo" : "stuk"} (€)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            inputMode="decimal"
+                                            step="0.01"
+                                            value={editPrice}
+                                            onChange={(e) => setEditPrice(e.target.value)}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base text-slate-900"
+                                            placeholder="bijv. 2.50"
+                                        />
+                                    </div>
+
+                                </div>
+
+                                <div className="flex gap-3 mt-6">
+                                    <button
+                                        onClick={() => setEditMode(false)}
+                                        className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                    >
+                                        Terug
+                                    </button>
+                                    <button
+                                        onClick={saveProductChanges}
+                                        disabled={saving}
+                                        className="flex-1 px-4 py-2 rounded-lg bg-blue-500 text-white font-semibold hover:brightness-110 transition shadow-md disabled:opacity-50"
+                                    >
+                                        {saving ? "Opslaan..." : "Opslaan"}
+                                    </button>
+                                </div>
+
+                                <button
+                                    onClick={deleteProduct}
+                                    disabled={saving}
+                                    className="w-full mt-3 px-4 py-2 rounded-lg border border-red-300 text-red-600 font-semibold hover:bg-red-50 transition disabled:opacity-50"
+                                >
+                                    Product verbergen
+                                </button>
+                            </>
+                        )}
+                    </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Sticky bottom bar */}
+            <div className="fixed bottom-0 inset-x-0 border-t-2 border-gray-200 bg-white/95 backdrop-blur-md shadow-2xl">
+                <div className="mx-auto max-w-7xl px-3 sm:px-4 py-3 sm:py-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+                    <div className="flex items-baseline gap-2 justify-center sm:justify-start">
+                        <span className="text-sm sm:text-lg font-semibold text-slate-700">Totaal:</span>
+                        <span className="text-2xl sm:text-3xl font-bold text-slate-900">
+                            € {total.toFixed(2)}
+                        </span>
+                        <span className="text-xs sm:text-sm text-slate-500 ml-1 sm:ml-2">
+                            ({cart.length} {cart.length === 1 ? "item" : "items"})
+                        </span>
+                    </div>
+                    <button
+                        onClick={() => cart.length && setOpen(true)}
+                        disabled={cart.length === 0}
+                        className="px-6 sm:px-8 py-3 sm:py-4 text-lg sm:text-xl rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-bold disabled:opacity-50 hover:brightness-110 transition shadow-xl active:scale-95"
+                    >
+                        🛒 Bekijk bon
+                    </button>
+                </div>
+            </div>
+
+            {/* Drawer overlay */}
+            {open && (
+                <div className="fixed inset-0 z-50">
+                    <div
+                        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                        onClick={() => setOpen(false)}
+                        aria-hidden="true"
+                    />
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        className="absolute right-0 top-0 h-full w-full sm:w-[440px] bg-white/95 backdrop-blur-md shadow-xl border-l border-gray-200 flex flex-col"
+                    >
+                        <div className="shrink-0 p-4 border-b-2 border-gray-200 flex items-center justify-between bg-white sticky top-0 z-10">
+                            <h2 className="text-xl font-semibold text-slate-900">Winkelmand</h2>
+                            <button
+                                onClick={() => setOpen(false)}
+                                className="px-4 py-2.5 rounded-lg bg-slate-800 text-white font-bold text-sm hover:bg-slate-700 active:scale-95 transition shadow-md"
+                            >
+                                ✕ Sluiten
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-auto p-4 space-y-3 bg-gray-50/50">
+                            {cart.length === 0 ? (
+                                <p className="text-slate-600 text-sm">Nog geen items.</p>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {cart.map((ci, idx) => (
+                                        <li
+                                            key={`${ci.product_id}-${idx}`}
+                                            className="rounded-lg border border-gray-200 bg-white/90 backdrop-blur-sm p-3 shadow-sm"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="font-medium leading-tight break-words text-slate-900">
+                                                    {ci.name}
+                                                </div>
+                                                <button
+                                                    onClick={() => removeItem(ci.product_id)}
+                                                    className="shrink-0 px-3 py-2 -my-2 -mr-1 min-h-[44px] text-sm text-red-600 hover:text-red-700 active:bg-red-50 rounded-lg font-medium transition"
+                                                >
+                                                    verwijderen
+                                                </button>
+                                            </div>
+
+                                            <div className="mt-1 text-xs text-slate-600">
+                                                € {ci.unit_price.toFixed(2)} {ci.unit === "KILO" ? "/ KILO" : "/ STUK"}
+                                            </div>
+
+                                            {ci.unit === "STUK" ? (
+                                                <div className="mt-2 flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => updateQty(ci.product_id, (ci.quantity ?? 0) - 1)}
+                                                        className="min-w-[44px] min-h-[44px] text-xl font-bold border border-gray-300 rounded-lg bg-white hover:bg-gray-50 active:bg-gray-200 active:scale-95 transition text-slate-900"
+                                                    >
+                                                        −
+                                                    </button>
+                                                    <input
+                                                        type="number"
+                                                        inputMode="decimal"
+                                                        step="0.01"
+                                                        min="0.01"
+                                                        value={ci.quantity ?? 0}
+                                                        onChange={(e) => updateQty(ci.product_id, Number(e.target.value || 0))}
+                                                        className="w-20 min-h-[44px] border border-gray-300 rounded-lg px-2 py-1 text-center text-base bg-white text-slate-900"
+                                                    />
+                                                    <button
+                                                        onClick={() => updateQty(ci.product_id, (ci.quantity ?? 0) + 1)}
+                                                        className="min-w-[44px] min-h-[44px] text-xl font-bold border border-gray-300 rounded-lg bg-white hover:bg-gray-50 active:bg-gray-200 active:scale-95 transition text-slate-900"
+                                                    >
+                                                        +
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="mt-2 flex items-center gap-2">
+                                                    <label className="text-sm text-slate-600">kg</label>
+                                                    <input
+                                                        type="number"
+                                                        inputMode="decimal"
+                                                        min={0}
+                                                        step="0.01"
+                                                        value={ci.weight_kg ?? 0}
+                                                        onChange={(e) => updateWeight(ci.product_id, Number(e.target.value || 0))}
+                                                        className="w-24 min-h-[44px] border border-gray-300 rounded-lg px-2 py-1 text-center text-base bg-white text-slate-900"
+                                                    />
+                                                </div>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+
+                        <div className="p-4 border-t border-gray-200 space-y-3 bg-white">
+                            <textarea
+                                placeholder="Opmerking (optioneel)…"
+                                className="w-full h-20 border border-gray-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-400"
+                                value={note}
+                                onChange={(e) => setNote(e.target.value)}
+                            />
+
+                            {/* Voucher checkbox */}
+                            <label className="flex items-center gap-3 p-3 rounded-lg border-2 border-dashed border-orange-300 bg-orange-50 cursor-pointer hover:bg-orange-100 transition">
+                                <input
+                                    type="checkbox"
+                                    checked={voucherApplied}
+                                    onChange={(e) => setVoucherApplied(e.target.checked)}
+                                    className="w-5 h-5 accent-orange-500 rounded"
+                                />
+                                <div>
+                                    <span className="font-semibold text-slate-900">Kortingsvoucher</span>
+                                    <span className="text-sm text-slate-600 ml-1">(-€5,00)</span>
+                                </div>
+                            </label>
+
+                            {voucherApplied && (
+                                <div className="text-sm text-slate-600 space-y-1">
+                                    <div className="flex justify-between">
+                                        <span>Subtotaal:</span>
+                                        <span>€ {subtotal.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-orange-600 font-semibold">
+                                        <span>Voucher korting:</span>
+                                        <span>- € {Math.min(5, subtotal).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between font-bold text-slate-900 border-t border-gray-200 pt-1">
+                                        <span>Totaal:</span>
+                                        <span>€ {total.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={openPaymentModal}
+                                disabled={saving || cart.length === 0}
+                                className="w-full py-5 text-xl rounded-xl bg-gradient-to-r from-green-400 via-orange-400 to-red-500 text-white font-bold disabled:opacity-50 hover:brightness-110 transition shadow-xl active:scale-95"
+                            >
+                                {saving ? "⏳ Opslaan…" : `✓ AFREKENEN — € ${total.toFixed(2)}`}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Betalingsmodal */}
+            {paymentModalOpen && (
+                <div className="fixed inset-0 z-50 overflow-y-auto">
+                    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={closePaymentModal} />
+                    <div className="flex min-h-full items-center justify-center p-4">
+                    <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-6 max-w-md w-full">
+                        <h2 className="text-2xl font-bold mb-6 text-slate-900">Betaalmethode</h2>
+
+                        {!paymentMethod ? (
+                            <div className="space-y-4">
+                                <button
+                                    onClick={() => setPaymentMethod("PIN")}
+                                    className="w-full py-6 text-xl rounded-xl bg-blue-500 text-white font-bold hover:brightness-110 transition shadow-lg active:scale-95"
+                                >
+                                    💳 Pin betalen
+                                </button>
+                                <button
+                                    onClick={() => setPaymentMethod("CONTANT")}
+                                    className="w-full py-6 text-xl rounded-xl bg-green-500 text-white font-bold hover:brightness-110 transition shadow-lg active:scale-95"
+                                >
+                                    💵 Contant betalen
+                                </button>
+                                <button
+                                    onClick={closePaymentModal}
+                                    className="w-full py-3 rounded-lg border-2 border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                >
+                                    Annuleren
+                                </button>
+                            </div>
+                        ) : paymentMethod === "PIN" ? (
+                            <div className="space-y-4">
+                                <div className="bg-blue-50 rounded-lg p-4 mb-4">
+                                    <div className="text-sm text-slate-600 mb-1">Totaalbedrag:</div>
+                                    <div className="text-3xl font-bold text-slate-900">€ {total.toFixed(2)}</div>
+                                </div>
+                                <p className="text-slate-700 mb-6">De betaling wordt direct verwerkt.</p>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setPaymentMethod(null)}
+                                        className="flex-1 px-4 py-3 rounded-lg border-2 border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                    >
+                                        Terug
+                                    </button>
+                                    <button
+                                        onClick={checkout}
+                                        disabled={saving}
+                                        className="flex-1 px-6 py-3 rounded-xl bg-blue-500 text-white font-bold hover:brightness-110 transition shadow-lg disabled:opacity-50"
+                                    >
+                                        {saving ? "⏳ Bezig..." : "✓ Bevestigen"}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="bg-green-50 rounded-lg p-4 mb-4">
+                                    <div className="text-sm text-slate-600 mb-1">Totaalbedrag:</div>
+                                    <div className="text-3xl font-bold text-slate-900">€ {total.toFixed(2)}</div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-2 text-slate-700">
+                                        Ontvangen bedrag (€)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        step="0.01"
+                                        min={total}
+                                        value={cashReceived}
+                                        onChange={(e) => handleCashReceivedChange(e.target.value)}
+                                        placeholder={`Min. € ${total.toFixed(2)}`}
+                                        className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-2xl font-bold text-slate-900 focus:border-green-500 focus:ring-4 focus:ring-green-200 transition"
+                                        autoFocus
+                                    />
+                                </div>
+
+                                {cashReceived && parseFloat(cashReceived) >= total && (
+                                    <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
+                                        <div className="text-sm text-slate-600 mb-1">Wisselgeld (afgerond):</div>
+                                        <div className="text-3xl font-bold text-green-600">
+                                            € {changeAmount.toFixed(2)}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-3 mt-6">
+                                    <button
+                                        onClick={() => setPaymentMethod(null)}
+                                        className="flex-1 px-4 py-3 rounded-lg border-2 border-gray-300 text-slate-700 font-semibold hover:bg-gray-50 transition"
+                                    >
+                                        Terug
+                                    </button>
+                                    <button
+                                        onClick={checkout}
+                                        disabled={saving || !cashReceived || parseFloat(cashReceived) < total}
+                                        className="flex-1 px-6 py-3 rounded-xl bg-green-500 text-white font-bold hover:brightness-110 transition shadow-lg disabled:opacity-50"
+                                    >
+                                        {saving ? "⏳ Bezig..." : "✓ Bevestigen"}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
