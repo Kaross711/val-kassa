@@ -2,7 +2,7 @@
 //
 // Inloggen met twee wachtwoorden: het bestaande SITE_PASSWORD geeft een
 // beheerder toegang tot alles, WERKNEMER_WW geeft een medewerker alleen
-// toegang tot de kassa.
+// toegang tot de kassa en de winkelverkopen.
 //
 // De rol staat in een ondertekend cookie. Zonder handtekening zou een
 // medewerker in de browser gewoon een cookie "rol=admin" kunnen zetten en
@@ -16,7 +16,7 @@ export const SESSIE_COOKIE = "sessie";
 export const SESSIE_GELDIGHEID_SECONDEN = 60 * 60 * 24 * 30;
 
 /** Pagina's en routes die alleen de beheerder mag zien. */
-const ALLEEN_BEHEERDER = ["/inkoop", "/verkoop", "/kosten", "/api/ocr"];
+const ALLEEN_BEHEERDER = ["/inkoop", "/kosten", "/api/ocr"];
 
 /** Routes die zonder inloggen bereikbaar moeten blijven. */
 const OPENBAAR = ["/login", "/api/login", "/api/logout"];

@@ -29,13 +29,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     </Link>
                     <div className="ml-auto flex items-center gap-0.5 md:gap-2">
                         <NavLink href="/kassa">Kassa</NavLink>
-                        {rol === "admin" && (
-                            <>
-                                <NavLink href="/inkoop">Inkoop</NavLink>
-                                <NavLink href="/verkoop">Verkoop</NavLink>
-                                <NavLink href="/kosten">Kosten</NavLink>
-                            </>
-                        )}
+                        {rol === "admin" && <NavLink href="/inkoop">Inkoop</NavLink>}
+                        <NavLink href="/verkoop">Verkoop</NavLink>
+                        {rol === "admin" && <NavLink href="/kosten">Kosten</NavLink>}
                         <form action="/api/logout" method="post" className="shrink-0">
                             <button
                                 type="submit"
